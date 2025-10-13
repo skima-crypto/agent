@@ -276,36 +276,45 @@ export default function ChatPage() {
     setIsRecording(false)
   }
 
-  // Send message
-  const sendMessage = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault()
-    if (!user) return
-    if (!newMessage.trim() && !imageUrl && !audioUrl) return
+ //send message function
+const sendMessage = async (e?: React.FormEvent) => {
+  if (e) e.preventDefault()
+  if (!user) return
+  if (!newMessage.trim() && !imageUrl && !audioUrl) return
 
-    const content = replyTo ? `↩️ ${replyTo.username}: ${replyTo.content}\n${newMessage}` : newMessage
+  const content = replyTo ? `↩️ ${replyTo.username}: ${replyTo.content}\n${newMessage}` : newMessage
 
-    const { error } = await supabase.from('messages').insert({
-      user_id: user.id,
-      username: profile?.username || user.user_metadata?.full_name || user.email.split('@')[0],
-      avatar_url: profile?.avatar_url || user.user_metadata?.avatar_url || '',
-      content,
-      image_url: imageUrl || null,
-      audio_url: audioUrl || null,
-      parent_id: replyTo?.id || null,
-    })
-    if (error) {
-      console.error('send error', error)
-      alert('Message send failed.')
-      return
-    }
-
-    setNewMessage('')
-    setImageUrl(null)
-    setAudioUrl(null)
-    setReplyTo(null)
-    setShowEmoji(false)
-    setTimeout(() => messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight, behavior: 'smooth' }), 100)
+  // Construct new message locally
+  const newMsg: Message = {
+    id: crypto.randomUUID(),
+    user_id: user.id,
+    username: profile?.username || user.user_metadata?.full_name || user.email.split('@')[0],
+    avatar_url: profile?.avatar_url || user.user_metadata?.avatar_url || '',
+    content,
+    image_url: imageUrl || null,
+    audio_url: audioUrl || null,
+    parent_id: replyTo?.id || null,
+    created_at: new Date().toISOString(),
   }
+
+  // ⚡ Immediately show message locally (instant)
+  setMessages((prev) => [...prev, newMsg])
+  setTimeout(() =>
+    messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight, behavior: 'smooth' }), 100
+  )
+
+  // 🔗 Then sync to DB
+  const { error } = await supabase.from('messages').insert(newMsg)
+  if (error) console.error('send error', error)
+
+  // Reset fields
+  setNewMessage('')
+  setImageUrl(null)
+  setAudioUrl(null)
+  setReplyTo(null)
+  setShowEmoji(false)
+}
+ 
 
   // Toggle reaction
   const toggleReaction = async (messageId: string, emoji: string) => {
