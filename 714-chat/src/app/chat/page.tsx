@@ -8,6 +8,9 @@ import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 dayjs.extend(relativeTime)
 
+// Temporary DB placeholder (replace with your generated Database type if available)
+type Database = any
+
 type Message = {
   id: string
   user_id: string
@@ -47,22 +50,18 @@ export default function ChatPage() {
   const audioChunksRef = useRef<Blob[]>([])
   const messagesRef = useRef<HTMLDivElement | null>(null)
 
-  // util: relative time
   const timeAgo = (d: string) => dayjs(d).fromNow()
 
-  // --- helper: ensure buckets exist (avatars, chat-uploads)
+  // Ensure buckets exist
   const ensureBucket = async (bucket: string) => {
     try {
-      // listBuckets may require elevated privileges; we attempt create (if exists, createBucket will error)
-      const { error } = await supabase.storage.createBucket(bucket, { public: true })
-      // if error && message contains 'already exists' ignore; otherwise continue
-      // supabase returns error if exists — ignore silently
-    } catch (e) {
-      // ignore
+      await supabase.storage.createBucket(bucket, { public: true })
+    } catch {
+      /* ignore */
     }
   }
 
-  // --- init user + profile
+  // Init user + profile
   useEffect(() => {
     const init = async () => {
       const { data } = await supabase.auth.getSession()
@@ -73,88 +72,111 @@ export default function ChatPage() {
       }
       setUser(sessionUser)
 
-      // load profile from `profiles` table
-      const { data: prof } = await supabase.from('profiles').select('*').eq('id', sessionUser.id).single()
+      const { data: prof } = await supabase
+        .from<Database, any>('profiles')
+        .select('*')
+        .eq('id', sessionUser.id)
+        .single()
       setProfile(prof || null)
 
-      // ensure storage buckets exist (silent)
       await ensureBucket('chat-uploads')
       await ensureBucket('avatars')
-
       setLoading(false)
     }
+
     init()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // --- load messages + subscribe (realtime)
+  // Load messages and subscribe
   useEffect(() => {
-    let channel: any = null
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    let reactChannel: ReturnType<typeof supabase.channel> | null = null
 
     const loadAndSubscribe = async () => {
-      const { data, error } = await supabase.from<Message>('messages').select('*').order('created_at', { ascending: true })
-      if (!error && data) setMessages(data)
+      const { data, error } = await supabase
+        .from<Database, Message>('messages')
+        .select('*')
+        .order('created_at', { ascending: true })
 
+      if (!error && data) {
+  const messagesData = data as Message[]
+  setMessages(messagesData)
+  messagesData.forEach((m) => loadReactions(m.id))
+}
+
+
+      // Subscribe to messages
       channel = supabase
         .channel('public:messages')
         .on(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'messages' },
           (payload) => {
-            setMessages((prev) => [...prev, payload.new as Message])
-            // scroll to bottom
-            setTimeout(() => messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight, behavior: 'smooth' }), 100)
+            const newMsg = payload.new as Message
+            setMessages((prev) => [...prev, newMsg])
+            setTimeout(
+              () =>
+                messagesRef.current?.scrollTo({
+                  top: messagesRef.current.scrollHeight,
+                  behavior: 'smooth',
+                }),
+              100
+            )
           }
         )
         .on(
           'postgres_changes',
           { event: 'UPDATE', schema: 'public', table: 'messages' },
           (payload) => {
-            setMessages((prev) => prev.map((m) => (m.id === payload.new.id ? payload.new : m)))
+            const newMsg = payload.new as Message
+            setMessages((prev) =>
+              prev.map((m) => (m.id === newMsg.id ? newMsg : m))
+            )
           }
         )
         .subscribe()
 
-      // subscribe to reactions
-      const reactChannel = supabase
+      // Subscribe to reactions
+      reactChannel = supabase
         .channel('public:reactions')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reactions' }, (p) => {
-          // reload reactions for the message_id
-          const mid = p.new?.message_id ?? p.old?.message_id
-          if (!mid) return
-          loadReactions(mid)
-        })
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'message_reactions' },
+          (payload) => {
+            const mid =
+              (payload.new as Reaction | undefined)?.message_id ||
+              (payload.old as Reaction | undefined)?.message_id
+            if (mid) loadReactions(mid)
+          }
+        )
         .subscribe()
-
-      // initial load reactions for existing messages
-      data?.forEach((m) => loadReactions(m.id))
     }
 
     loadAndSubscribe()
 
     return () => {
-      try {
-        if (channel) supabase.removeChannel(channel)
-      } catch (e) {
-        // ignore
-      }
+      if (channel) supabase.removeChannel(channel)
+      if (reactChannel) supabase.removeChannel(reactChannel)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile, user])
 
-  // load reactions for a message
+  // Load reactions for a message
   const loadReactions = async (messageId: string) => {
-    const { data } = await supabase.from<Reaction>('message_reactions').select('*').eq('message_id', messageId)
-    setReactions((prev) => ({ ...prev, [messageId]: data || [] }))
+    const { data } = await supabase
+      .from<Database, Reaction>('message_reactions')
+      .select('*')
+      .eq('message_id', messageId)
+    setReactions((prev) => ({ ...prev, [messageId]: (data as Reaction[]) || [] }))
+
   }
 
-  // refresh timestamps (force rerender) every 30s
+  // Refresh timestamps
   useEffect(() => {
     const t = setInterval(() => setMessages((m) => [...m]), 30000)
     return () => clearInterval(t)
   }, [])
 
-  // --- handle image upload (auto-create bucket if missing)
+  // Upload image
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file || !user) return
@@ -162,17 +184,12 @@ export default function ChatPage() {
 
     try {
       const bucket = 'chat-uploads'
-      // try to create silently
       try {
         await supabase.storage.createBucket(bucket, { public: true })
-      } catch (err) {
-        // ignore
-      }
-
+      } catch {}
       const fileName = `${user.id}-${Date.now()}-${file.name}`
       const { error } = await supabase.storage.from(bucket).upload(fileName, file, { upsert: true })
       if (error) throw error
-
       const { data } = supabase.storage.from(bucket).getPublicUrl(fileName)
       setImageUrl(data.publicUrl)
     } catch (err: any) {
@@ -182,7 +199,7 @@ export default function ChatPage() {
     }
   }
 
-  // --- handle gif search (Tenor)
+  // Search GIFs
   const searchGifs = async (q: string) => {
     setGifResults([])
     try {
@@ -200,7 +217,6 @@ export default function ChatPage() {
     }
   }
 
-  // --- send gif by url
   const sendGif = async (gifUrl: string) => {
     if (!user) return
     const { error } = await supabase.from('messages').insert({
@@ -213,7 +229,7 @@ export default function ChatPage() {
     if (error) console.error(error)
   }
 
-  // --- start / stop voice recording (MediaRecorder)
+  // Voice record
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -226,7 +242,6 @@ export default function ChatPage() {
       }
       mr.onstop = async () => {
         const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
-        // upload
         const bucket = 'chat-uploads'
         const fileName = `${user.id}-voice-${Date.now()}.webm`
         try {
@@ -234,12 +249,11 @@ export default function ChatPage() {
           const { error } = await supabase.storage.from(bucket).upload(fileName, blob, { upsert: true })
           if (error) throw error
           const { data } = supabase.storage.from(bucket).getPublicUrl(fileName)
-          // save message with audio_url
           const { error: err2 } = await supabase.from('messages').insert({
             user_id: user.id,
             username: profile?.username || user.user_metadata?.full_name || user.email.split('@')[0],
             avatar_url: profile?.avatar_url || user.user_metadata?.avatar_url || '',
-            content: '', // optional text
+            content: '',
             audio_url: data.publicUrl,
           })
           if (err2) console.error(err2)
@@ -250,7 +264,7 @@ export default function ChatPage() {
 
       mr.start()
       setIsRecording(true)
-    } catch (err: any) {
+    } catch {
       alert('Microphone access denied or unavailable.')
     }
   }
@@ -262,13 +276,11 @@ export default function ChatPage() {
     setIsRecording(false)
   }
 
-  // --- send message with image/audio
+  // Send message
   const sendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
     if (!user) return
-    if (!newMessage.trim() && !imageUrl && !audioUrl) {
-      return
-    }
+    if (!newMessage.trim() && !imageUrl && !audioUrl) return
 
     const content = replyTo ? `↩️ ${replyTo.username}: ${replyTo.content}\n${newMessage}` : newMessage
 
@@ -281,7 +293,6 @@ export default function ChatPage() {
       audio_url: audioUrl || null,
       parent_id: replyTo?.id || null,
     })
-
     if (error) {
       console.error('send error', error)
       alert('Message send failed.')
@@ -293,22 +304,18 @@ export default function ChatPage() {
     setAudioUrl(null)
     setReplyTo(null)
     setShowEmoji(false)
-    // scroll down
     setTimeout(() => messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight, behavior: 'smooth' }), 100)
   }
 
-  // --- add/remove reaction (toggle)
+  // Toggle reaction
   const toggleReaction = async (messageId: string, emoji: string) => {
     if (!user) return
-    // check if user already reacted
     const existing = (reactions[messageId] || []).find((r) => r.user_id === user.id && r.emoji === emoji)
     if (existing) {
-      // delete
       const { error } = await supabase.from('message_reactions').delete().match({ id: existing.id })
       if (error) console.error(error)
       return
     }
-    // insert
     const { error } = await supabase.from('message_reactions').insert({
       message_id: messageId,
       user_id: user.id,
@@ -317,13 +324,11 @@ export default function ChatPage() {
     if (error) console.error(error)
   }
 
-  // --- helper: play audio (simple)
   const playAudio = (url: string) => {
     const audio = new Audio(url)
     audio.play().catch((e) => console.error(e))
   }
 
-  // --- auto-scroll to bottom when messages change
   useEffect(() => {
     setTimeout(() => messagesRef.current?.scrollTo({ top: messagesRef.current?.scrollHeight, behavior: 'smooth' }), 150)
   }, [messages.length])
