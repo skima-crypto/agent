@@ -8,9 +8,7 @@ import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 dayjs.extend(relativeTime)
 
-// Temporary DB placeholder (replace with your generated Database type if available)
-type Database = any
-
+// --- Types ---
 type Message = {
   id: string
   user_id: string
@@ -31,6 +29,7 @@ type Reaction = {
   created_at: string
 }
 
+// --- Component ---
 export default function ChatPage() {
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
@@ -49,19 +48,18 @@ export default function ChatPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const messagesRef = useRef<HTMLDivElement | null>(null)
+  
 
   const timeAgo = (d: string) => dayjs(d).fromNow()
 
-  // Ensure buckets exist
+  // --- Ensure buckets exist ---
   const ensureBucket = async (bucket: string) => {
     try {
       await supabase.storage.createBucket(bucket, { public: true })
-    } catch {
-      /* ignore */
-    }
+    } catch {}
   }
 
-  // Init user + profile
+  // --- Initialize user & profile ---
   useEffect(() => {
     const init = async () => {
       const { data } = await supabase.auth.getSession()
@@ -73,7 +71,7 @@ export default function ChatPage() {
       setUser(sessionUser)
 
       const { data: prof } = await supabase
-        .from<Database, any>('profiles')
+        .from('profiles')
         .select('*')
         .eq('id', sessionUser.id)
         .single()
@@ -83,100 +81,162 @@ export default function ChatPage() {
       await ensureBucket('avatars')
       setLoading(false)
     }
-
     init()
   }, [])
 
-  // Load messages and subscribe
-  useEffect(() => {
-    let channel: ReturnType<typeof supabase.channel> | null = null
-    let reactChannel: ReturnType<typeof supabase.channel> | null = null
+// --- Load messages & subscribe to realtime updates ---
+useEffect(() => {
+  if (!user) return
 
-    const loadAndSubscribe = async () => {
-      const { data, error } = await supabase
-        .from<Database, Message>('messages')
-        .select('*')
-        .order('created_at', { ascending: true })
-
-      if (!error && data) {
-  const messagesData = data as Message[]
-  setMessages(messagesData)
-  messagesData.forEach((m) => loadReactions(m.id))
-}
-
-
-      // Subscribe to messages
-      channel = supabase
-        .channel('public:messages')
-        .on(
-          'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'messages' },
-          (payload) => {
-            const newMsg = payload.new as Message
-            setMessages((prev) => [...prev, newMsg])
-            setTimeout(
-              () =>
-                messagesRef.current?.scrollTo({
-                  top: messagesRef.current.scrollHeight,
-                  behavior: 'smooth',
-                }),
-              100
-            )
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: 'UPDATE', schema: 'public', table: 'messages' },
-          (payload) => {
-            const newMsg = payload.new as Message
-            setMessages((prev) =>
-              prev.map((m) => (m.id === newMsg.id ? newMsg : m))
-            )
-          }
-        )
-        .subscribe()
-
-      // Subscribe to reactions
-      reactChannel = supabase
-        .channel('public:reactions')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'message_reactions' },
-          (payload) => {
-            const mid =
-              (payload.new as Reaction | undefined)?.message_id ||
-              (payload.old as Reaction | undefined)?.message_id
-            if (mid) loadReactions(mid)
-          }
-        )
-        .subscribe()
+  const loadAndSubscribe = async () => {
+    try {
+      // Load initial messages
+      const res = await fetch('/api/chat')
+      if (!res.ok) throw new Error('Failed to fetch messages')
+      const data = await res.json()
+      setMessages(data)
+    } catch (err) {
+      console.error('Error loading messages:', err)
     }
 
-    loadAndSubscribe()
+    // ✅ Proper realtime listener
+    const channel = supabase
+      .channel('public:messages') // Must match schema:table
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // listen to INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'messages',
+        },
+        (payload) => {
+          const newMsg = payload.new as Message
+          const oldMsg = payload.old as Message
+
+          setMessages((prev) => {
+            switch (payload.eventType) {
+              case 'INSERT':
+                if (prev.some((m) => m.id === newMsg.id)) return prev
+                return [...prev, newMsg]
+              case 'UPDATE':
+                return prev.map((m) => (m.id === newMsg.id ? newMsg : m))
+              case 'DELETE':
+                return prev.filter((m) => m.id !== oldMsg.id)
+              default:
+                return prev
+            }
+          })
+
+          // Auto-scroll when a new message appears
+          setTimeout(() => {
+            messagesRef.current?.scrollTo({
+              top: messagesRef.current.scrollHeight,
+              behavior: 'smooth',
+            })
+          }, 100)
+        }
+      )
+      .subscribe()
 
     return () => {
-      if (channel) supabase.removeChannel(channel)
-      if (reactChannel) supabase.removeChannel(reactChannel)
+      supabase.removeChannel(channel)
     }
-  }, [profile, user])
-
-  // Load reactions for a message
-  const loadReactions = async (messageId: string) => {
-    const { data } = await supabase
-      .from<Database, Reaction>('message_reactions')
-      .select('*')
-      .eq('message_id', messageId)
-    setReactions((prev) => ({ ...prev, [messageId]: (data as Reaction[]) || [] }))
-
   }
 
-  // Refresh timestamps
-  useEffect(() => {
-    const t = setInterval(() => setMessages((m) => [...m]), 30000)
-    return () => clearInterval(t)
-  }, [])
+  loadAndSubscribe()
+}, [user])
 
-  // Upload image
+
+  // --- Load and subscribe to reactions ---
+useEffect(() => {
+  if (!user) return
+
+  const loadReactions = async () => {
+    const res = await fetch('/api/reactions')
+    if (!res.ok) return
+    const data: Reaction[] = await res.json()
+
+    const grouped = data.reduce((acc: Record<string, Reaction[]>, r) => {
+      acc[r.message_id] = acc[r.message_id] || []
+      acc[r.message_id].push(r)
+      return acc
+    }, {})
+    setReactions(grouped)
+  }
+  loadReactions()
+
+  const channel = supabase
+    .channel('chat-reactions')
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'reactions' },
+      (payload) => {
+        const newReaction = payload.new as Reaction
+        setReactions((prev) => {
+          const current = prev[newReaction.message_id] || []
+          return {
+            ...prev,
+            [newReaction.message_id]: [...current, newReaction],
+          }
+        })
+      }
+    )
+    .subscribe()
+
+  return () => {
+    supabase.removeChannel(channel)
+  }
+}, [user])
+
+
+  // --- Send Message ---
+  const sendMessage = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    if (!user) return
+    if (!newMessage.trim() && !imageUrl && !audioUrl) return
+
+    const content = replyTo
+      ? `↩️ ${replyTo.username}: ${replyTo.content}\n${newMessage}`
+      : newMessage
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.id,
+          username:
+            profile?.username ||
+            user.user_metadata?.full_name ||
+            user.email.split('@')[0],
+          avatar_url:
+            profile?.avatar_url || user.user_metadata?.avatar_url || '',
+          content,
+          image_url: imageUrl || null,
+          audio_url: audioUrl || null,
+          parent_id: replyTo?.id || null,
+        }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        console.error('Send message error:', err)
+        return
+      }
+
+      const newMsg = await res.json()
+      setMessages((prev) => [...prev, newMsg])
+      setNewMessage('')
+      setImageUrl(null)
+      setAudioUrl(null)
+      setReplyTo(null)
+      setShowEmoji(false)
+    } catch (err) {
+      console.error('Send message failed:', err)
+    }
+  }
+
+  // --- Image Upload ---
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file || !user) return
@@ -184,11 +244,11 @@ export default function ChatPage() {
 
     try {
       const bucket = 'chat-uploads'
-      try {
-        await supabase.storage.createBucket(bucket, { public: true })
-      } catch {}
+      await ensureBucket(bucket)
       const fileName = `${user.id}-${Date.now()}-${file.name}`
-      const { error } = await supabase.storage.from(bucket).upload(fileName, file, { upsert: true })
+      const { error } = await supabase.storage
+        .from(bucket)
+        .upload(fileName, file, { upsert: true })
       if (error) throw error
       const { data } = supabase.storage.from(bucket).getPublicUrl(fileName)
       setImageUrl(data.publicUrl)
@@ -199,64 +259,34 @@ export default function ChatPage() {
     }
   }
 
-  // Search GIFs
-  const searchGifs = async (q: string) => {
-    setGifResults([])
-    try {
-      const key = process.env.NEXT_PUBLIC_TENOR_API_KEY
-      if (!key) {
-        alert('No TENOR API key set. Add NEXT_PUBLIC_TENOR_API_KEY in .env.local')
-        return
-      }
-      const res = await fetch(`https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(q)}&key=${key}&limit=24`)
-      const json = await res.json()
-      setGifResults(json.results || [])
-    } catch (e) {
-      console.error(e)
-      setGifResults([])
-    }
-  }
-
-  const sendGif = async (gifUrl: string) => {
-    if (!user) return
-    const { error } = await supabase.from('messages').insert({
-      user_id: user.id,
-      username: profile?.username || user.user_metadata?.full_name || user.email.split('@')[0],
-      avatar_url: profile?.avatar_url || user.user_metadata?.avatar_url || '',
-      content: '',
-      image_url: gifUrl,
-    })
-    if (error) console.error(error)
-  }
-
-  // Voice record
+  // --- Voice Recording ---
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      if (!stream) return alert('Microphone not found')
+
       const mr = new MediaRecorder(stream)
       mediaRecorderRef.current = mr
       audioChunksRef.current = []
 
-      mr.ondataavailable = (ev) => {
-        if (ev.data.size > 0) audioChunksRef.current.push(ev.data)
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data)
       }
+
       mr.onstop = async () => {
         const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
-        const bucket = 'chat-uploads'
         const fileName = `${user.id}-voice-${Date.now()}.webm`
+        const bucket = 'chat-uploads'
+
         try {
-          await supabase.storage.createBucket(bucket, { public: true }).catch(() => {})
-          const { error } = await supabase.storage.from(bucket).upload(fileName, blob, { upsert: true })
+          await ensureBucket(bucket)
+          const { error } = await supabase.storage
+            .from(bucket)
+            .upload(fileName, blob, { upsert: true })
           if (error) throw error
           const { data } = supabase.storage.from(bucket).getPublicUrl(fileName)
-          const { error: err2 } = await supabase.from('messages').insert({
-            user_id: user.id,
-            username: profile?.username || user.user_metadata?.full_name || user.email.split('@')[0],
-            avatar_url: profile?.avatar_url || user.user_metadata?.avatar_url || '',
-            content: '',
-            audio_url: data.publicUrl,
-          })
-          if (err2) console.error(err2)
+          setAudioUrl(data.publicUrl)
+          await sendMessage()
         } catch (err: any) {
           alert('Voice upload failed: ' + (err.message || err))
         }
@@ -264,8 +294,9 @@ export default function ChatPage() {
 
       mr.start()
       setIsRecording(true)
-    } catch {
-      alert('Microphone access denied or unavailable.')
+    } catch (err: any) {
+      console.error(err)
+      alert('Microphone access failed.')
     }
   }
 
@@ -276,70 +307,20 @@ export default function ChatPage() {
     setIsRecording(false)
   }
 
- //send message function
-const sendMessage = async (e?: React.FormEvent) => {
-  if (e) e.preventDefault()
-  if (!user) return
-  if (!newMessage.trim() && !imageUrl && !audioUrl) return
-
-  const content = replyTo ? `↩️ ${replyTo.username}: ${replyTo.content}\n${newMessage}` : newMessage
-
-  // Construct new message locally
-  const newMsg: Message = {
-    id: crypto.randomUUID(),
-    user_id: user.id,
-    username: profile?.username || user.user_metadata?.full_name || user.email.split('@')[0],
-    avatar_url: profile?.avatar_url || user.user_metadata?.avatar_url || '',
-    content,
-    image_url: imageUrl || null,
-    audio_url: audioUrl || null,
-    parent_id: replyTo?.id || null,
-    created_at: new Date().toISOString(),
-  }
-
-  // ⚡ Immediately show message locally (instant)
-  setMessages((prev) => [...prev, newMsg])
-  setTimeout(() =>
-    messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight, behavior: 'smooth' }), 100
-  )
-
-  // 🔗 Then sync to DB
-  const { error } = await supabase.from('messages').insert(newMsg)
-  if (error) console.error('send error', error)
-
-  // Reset fields
-  setNewMessage('')
-  setImageUrl(null)
-  setAudioUrl(null)
-  setReplyTo(null)
-  setShowEmoji(false)
-}
- 
-
-  // Toggle reaction
-  const toggleReaction = async (messageId: string, emoji: string) => {
-    if (!user) return
-    const existing = (reactions[messageId] || []).find((r) => r.user_id === user.id && r.emoji === emoji)
-    if (existing) {
-      const { error } = await supabase.from('message_reactions').delete().match({ id: existing.id })
-      if (error) console.error(error)
-      return
-    }
-    const { error } = await supabase.from('message_reactions').insert({
-      message_id: messageId,
-      user_id: user.id,
-      emoji,
-    })
-    if (error) console.error(error)
-  }
-
+  // --- Play Audio ---
   const playAudio = (url: string) => {
     const audio = new Audio(url)
     audio.play().catch((e) => console.error(e))
   }
 
+  // --- Scroll to bottom on new messages ---
   useEffect(() => {
-    setTimeout(() => messagesRef.current?.scrollTo({ top: messagesRef.current?.scrollHeight, behavior: 'smooth' }), 150)
+    setTimeout(() => {
+      messagesRef.current?.scrollTo({
+        top: messagesRef.current.scrollHeight,
+        behavior: 'smooth',
+      })
+    }, 150)
   }, [messages.length])
 
   if (loading)
@@ -349,9 +330,26 @@ const sendMessage = async (e?: React.FormEvent) => {
       </div>
     )
 
+
+    const handleAddReaction = async (messageId: string) => {
+  const emoji = prompt('React with emoji (e.g. 😍, 😂, 👍):')
+  if (!emoji) return
+
+  const res = await fetch('/api/reactions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message_id: messageId, user_id: user.id, emoji }),
+  })
+
+  if (!res.ok) {
+    const err = await res.json()
+    console.error('Failed to add reaction:', err)
+  }
+}
+
+
   return (
     <div className="flex flex-col h-screen bg-black text-white">
-      {/* background overlay - if you upload /public/714BG.* and want it behind chat */}
       <div className="absolute inset-0 -z-10">
         <Image src="/714BG.jpg" alt="bg" fill className="object-cover opacity-10" />
       </div>
@@ -360,151 +358,91 @@ const sendMessage = async (e?: React.FormEvent) => {
         💬 714 Global Chat
       </header>
 
-      {/* Messages Area */}
-      <div
-        ref={messagesRef}
-        className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-zinc-700 relative"
-      >
-        {messages.map((msg) => {
-          const mine = msg.user_id === user.id
-          const msgReacts = reactions[msg.id] || []
+      {/* --- Messages List --- */}
+      {/* --- Messages List --- */}
+<div
+  ref={messagesRef}
+  className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-zinc-700 relative"
+>
+  {messages.map((msg) => {
+    const mine = msg.user_id === user.id
+    return (
+      <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+        <div className={`flex max-w-[75%] items-end gap-2 ${mine ? 'flex-row-reverse text-right' : ''}`}>
+          {!mine && (
+            <img
+              src={msg.avatar_url || '/default-avatar.png'}
+              alt={msg.username}
+              className="w-8 h-8 rounded-full shadow-md object-cover"
+            />
+          )}
+          <div
+            className={`p-3 rounded-2xl shadow-md ${
+              mine ? 'bg-blue-600 rounded-br-none' : 'bg-zinc-800 rounded-bl-none'
+            }`}
+          >
+            {!mine && (
+              <p className="text-xs text-gray-400 font-semibold mb-1">
+                {msg.username}
+              </p>
+            )}
 
-          // aggregate reactions into {emoji: {count, reactedByMe}}
-          const agg: Record<
-            string,
-            { count: number; reactedByMe: boolean }
-          > = {}
-          msgReacts.forEach((r) => {
-            if (!agg[r.emoji]) agg[r.emoji] = { count: 0, reactedByMe: false }
-            agg[r.emoji].count += 1
-            if (r.user_id === user.id) agg[r.emoji].reactedByMe = true
-          })
+            {msg.image_url && (
+              <Image
+                src={msg.image_url}
+                alt="upload"
+                width={360}
+                height={240}
+                className="rounded-lg mb-2 object-cover"
+              />
+            )}
 
-          return (
-            <div
-              key={msg.id}
-              className={`flex ${mine ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`flex max-w-[75%] items-end gap-2 ${
-                  mine ? 'flex-row-reverse text-right' : ''
-                }`}
-              >
-                {/* avatar on left for others */}
-                {!mine && (
-                  <div className="flex-shrink-0">
-                    <img
-                      src={
-                        msg.avatar_url ||
-                        profile?.avatar_url ||
-                        '/default-avatar.png'
-                      }
-                      alt={msg.username}
-                      className="w-8 h-8 rounded-full shadow-md object-cover"
-                    />
-                  </div>
-                )}
-
-                <div
-                  className={`p-3 rounded-2xl shadow-md transition-transform ${
-                    mine
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white rounded-br-none'
-                      : 'bg-zinc-800 hover:bg-zinc-700 text-gray-100 rounded-bl-none'
-                  }`}
+            {msg.audio_url && (
+              <div className="mb-2 flex items-center gap-2">
+                <button
+                  onClick={() => playAudio(msg.audio_url!)}
+                  className="px-2 py-1 bg-zinc-900 rounded-md"
                 >
-                  {/* username for others */}
-                  {!mine && (
-                    <p className="text-xs text-gray-400 font-semibold mb-1">
-                      {msg.username}
-                    </p>
-                  )}
-
-                  {/* image or gif */}
-                  {msg.image_url && (
-                    <div className="mb-2">
-                      <Image
-                        src={msg.image_url}
-                        alt="upload"
-                        width={360}
-                        height={240}
-                        className="rounded-lg object-cover"
-                      />
-                    </div>
-                  )}
-
-                  {/* audio */}
-                  {msg.audio_url && (
-                    <div className="mb-2 flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => playAudio(msg.audio_url!)}
-                        className="px-2 py-1 bg-zinc-900 rounded-md"
-                      >
-                        ▶️ Play
-                      </button>
-                      <span className="text-xs text-gray-400">Voice note</span>
-                    </div>
-                  )}
-
-                  {/* message content */}
-                  {msg.content && (
-                    <p className="text-sm leading-snug whitespace-pre-wrap">
-                      {msg.content}
-                    </p>
-                  )}
-
-                  {/* reactions row */}
-                  <div className="mt-2 flex items-center gap-2">
-                    {Object.keys(agg).map((emoji) => (
-                      <button
-                        key={emoji}
-                        onClick={() => toggleReaction(msg.id, emoji)}
-                        className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs ${
-                          agg[emoji].reactedByMe
-                            ? 'bg-white text-black'
-                            : 'bg-zinc-900 text-gray-200'
-                        }`}
-                      >
-                        <span>{emoji}</span>
-                        <span>{agg[emoji].count}</span>
-                      </button>
-                    ))}
-
-                    {/* reply & add reaction quick buttons */}
-                    <div className="ml-2 flex items-center gap-2">
-                      <button
-                        onClick={() => setReplyTo(msg)}
-                        className="text-xs text-gray-400 hover:text-blue-300"
-                      >
-                        💬 Reply
-                      </button>
-
-                      {/* quick reaction suggestions */}
-                      <div className="flex gap-1">
-                        {['❤️', '😂', '👍', '🔥'].map((e) => (
-                          <button
-                            key={e}
-                            onClick={() => toggleReaction(msg.id, e)}
-                            className="text-sm"
-                          >
-                            {e}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="ml-auto text-[11px] text-gray-400">
-                      {timeAgo(msg.created_at)}
-                    </div>
-                  </div>
-                </div>
+                  ▶️ Play
+                </button>
+                <span className="text-xs text-gray-400">Voice note</span>
               </div>
-            </div>
-          )
-        })}
-      </div>
+            )}
 
-      {/* Reply preview */}
+            {msg.content && (
+              <p className="text-sm leading-snug whitespace-pre-wrap">
+                {msg.content}
+              </p>
+            )}
+
+            {/* --- Reactions Section --- */}
+            <div className="mt-2 flex flex-wrap gap-2 items-center">
+              {(reactions[msg.id] || []).map((r) => (
+                <span key={r.id} className="text-lg">
+                  {r.emoji}
+                </span>
+              ))}
+              <button
+                onClick={() => handleAddReaction(msg.id)}
+                className="text-gray-400 hover:text-yellow-400 text-sm"
+              >
+                ➕
+              </button>
+            </div>
+
+            <div className="mt-1 text-[11px] text-gray-400">
+              {timeAgo(msg.created_at)}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  })}
+</div>
+
+       
+
+      {/* --- Reply preview --- */}
       {replyTo && (
         <div className="bg-zinc-900 p-2 text-sm text-gray-300 border-t border-zinc-800">
           Replying to <strong>{replyTo.username}</strong> —{' '}
@@ -518,65 +456,11 @@ const sendMessage = async (e?: React.FormEvent) => {
         </div>
       )}
 
-      {/* GIF picker modal / panel */}
-      {showGifPicker && (
-        <div className="absolute bottom-28 left-4 z-30 w-[calc(100%-2rem)] max-w-2xl bg-zinc-900 border border-zinc-800 rounded-lg p-3 shadow-lg">
-          <div className="flex gap-2 mb-3">
-            <input
-              type="text"
-              placeholder="Search GIFs..."
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  searchGifs((e.target as HTMLInputElement).value)
-                }
-              }}
-              className="flex-1 px-3 py-2 rounded bg-zinc-800 text-white"
-            />
-            <button
-              onClick={() => setShowGifPicker(false)}
-              className="px-3 py-2 bg-zinc-700 rounded"
-            >
-              Close
-            </button>
-          </div>
-
-          <div className="grid grid-cols-4 gap-2 max-h-64 overflow-auto">
-            {gifResults.length === 0 ? (
-              <div className="col-span-4 text-center text-sm text-gray-400">
-                No GIFs. Search above.
-              </div>
-            ) : (
-              gifResults.map((g) => {
-                // Tenor v2 returns different shapes; pick a best guess
-                const url =
-                  g.media?.[0]?.gif?.url ||
-                  g.media_formats?.gif?.url ||
-                  g.url ||
-                  g.content_url
-                return (
-                  <button
-                    key={g.id || url}
-                    onClick={() => {
-                      sendGif(url)
-                      setShowGifPicker(false)
-                    }}
-                    className="rounded overflow-hidden"
-                  >
-                    <img src={url} alt="gif" className="w-full h-24 object-cover" />
-                  </button>
-                )
-              })
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Input area */}
+      {/* --- Input area --- */}
       <form
         onSubmit={(e) => sendMessage(e)}
         className="p-4 bg-zinc-950 border-t border-zinc-800 flex flex-col gap-3 z-10"
       >
-        {/* image preview */}
         {imageUrl && (
           <div className="relative w-fit">
             <Image src={imageUrl} alt="preview" width={140} height={140} className="rounded-lg mb-2 object-cover" />
@@ -594,22 +478,12 @@ const sendMessage = async (e?: React.FormEvent) => {
           <button
             type="button"
             onClick={() => setShowEmoji((v) => !v)}
-            className="text-2xl hover:scale-110 transition-transform"
-            title="Emoji"
+            className="text-2xl"
           >
             😊
           </button>
 
-          <button
-            type="button"
-            onClick={() => setShowGifPicker((v) => !v)}
-            className="px-3 py-2 bg-zinc-900 rounded"
-            title="GIFs"
-          >
-            GIF
-          </button>
-
-          <label className="text-sm text-gray-300 cursor-pointer px-2 py-1 bg-zinc-900 rounded">
+          <label className="cursor-pointer px-2 py-1 bg-zinc-900 rounded">
             Upload
             <input
               type="file"
@@ -619,13 +493,11 @@ const sendMessage = async (e?: React.FormEvent) => {
             />
           </label>
 
-          {/* voice record toggle */}
           {!isRecording ? (
             <button
               type="button"
               onClick={startRecording}
               className="px-3 py-2 bg-red-600 rounded text-white"
-              title="Record voice"
             >
               ◉
             </button>
@@ -634,7 +506,6 @@ const sendMessage = async (e?: React.FormEvent) => {
               type="button"
               onClick={stopRecording}
               className="px-3 py-2 bg-red-400 rounded text-white"
-              title="Stop"
             >
               ■
             </button>
@@ -645,7 +516,7 @@ const sendMessage = async (e?: React.FormEvent) => {
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             placeholder="Type your message..."
-            className="flex-1 bg-zinc-900 border border-zinc-800 text-white rounded-xl px-4 py-2 focus:outline-none"
+            className="flex-1 bg-zinc-900 border border-zinc-800 text-white rounded-xl px-4 py-2"
           />
 
           <button
@@ -656,7 +527,6 @@ const sendMessage = async (e?: React.FormEvent) => {
           </button>
         </div>
 
-        {/* emoji picker */}
         {showEmoji && (
           <div className="mt-2">
             <EmojiPicker
@@ -671,4 +541,3 @@ const sendMessage = async (e?: React.FormEvent) => {
     </div>
   )
 }
-
