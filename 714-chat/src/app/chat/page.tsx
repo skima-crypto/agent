@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabaseClient'
+import ProfileModal from '@/components/ProfileModal'
 import EmojiPicker, { Theme } from 'emoji-picker-react'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
@@ -382,56 +383,6 @@ useEffect(() => {
 }
 
 
-const ProfileModal = () =>
-  selectedProfile && (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-zinc-900 p-6 rounded-2xl w-[90%] max-w-sm text-center shadow-lg relative">
-        <button
-          onClick={closeProfile}
-          className="absolute top-3 right-4 text-gray-400 hover:text-white"
-        >
-          ✖
-        </button>
-
-        <img
-          src={selectedProfile.avatar_url || '/default-avatar.png'}
-          alt="avatar"
-          className="w-24 h-24 rounded-full mx-auto mb-4 border-4 border-blue-500 object-cover"
-        />
-        <h2 className="text-xl font-semibold mb-2">
-          {selectedProfile.username}
-        </h2>
-
-        {selectedProfile.wallet_address ? (
-          <p className="text-sm text-gray-400 mb-2">
-            Wallet: {selectedProfile.wallet_address}
-          </p>
-        ) : (
-          <p className="text-sm text-gray-500 mb-2 italic">
-            Wallet not connected
-          </p>
-        )}
-
-        {selectedProfile.id === user.id ? (
-          <button
-            onClick={() => (window.location.href = '/profile')}
-            className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-white mt-3"
-          >
-            Go to My Profile
-          </button>
-        ) : (
-          <button
-            className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg text-white mt-3"
-            onClick={() => alert('💸 Tip feature coming soon!')}
-          >
-            Tip User 💸
-          </button>
-        )}
-      </div>
-    </div>
-  )
-
-
   return (
     <div className="flex flex-col h-screen bg-black text-white">
       <div className="absolute inset-0 -z-10">
@@ -634,7 +585,12 @@ const ProfileModal = () =>
         )}
       </form>
 {/* --- Profile Modal --- */}
-<ProfileModal />
+{selectedProfile && (
+  <ProfileModal
+    userId={selectedProfile.id}
+    onClose={() => setSelectedProfile(null)}
+  />
+)}
 </div>
 )
 }
