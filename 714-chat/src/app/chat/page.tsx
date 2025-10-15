@@ -88,16 +88,30 @@ export default function ChatPage() {
 
   const openUserProfile = async (userId: string) => {
   try {
+    if (!userId) {
+      console.warn('⚠️ No userId provided to openUserProfile')
+      return
+    }
+
     const { data, error } = await supabase
       .from('profiles')
       .select('id, username, avatar_url, wallet_address')
       .eq('id', userId)
-      .single()
+      .maybeSingle() // ✅ instead of .single()
 
-    if (error) throw error
+    if (error) {
+      console.error('Supabase error:', error)
+      return
+    }
+
+    if (!data) {
+      console.warn('⚠️ No profile found for userId:', userId)
+      return
+    }
+
     setSelectedProfile(data)
-  } catch (err) {
-    console.error('Error loading profile:', err)
+  } catch (err: any) {
+    console.error('Error loading profile:', err.message || err)
   }
 }
 
@@ -434,79 +448,81 @@ const ProfileModal = () =>
   className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-zinc-700 relative"
 >
   {messages.map((msg) => {
-    const mine = msg.user_id === user.id
-    return (
-      <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-        <div className={`flex max-w-[75%] items-end gap-2 ${mine ? 'flex-row-reverse text-right' : ''}`}>
+  const mine = msg.user_id === user.id
+  return (
+    <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+      <div className={`flex max-w-[75%] items-end gap-2 ${mine ? 'flex-row-reverse text-right' : ''}`}>
+        {/* Avatar - now shown for both mine and others and clickable */}
+        <img
+          src={msg.avatar_url || '/default-avatar.png'}
+          alt={`${msg.username || 'User'} avatar`}
+          role="button"
+          onClick={() => openUserProfile(msg.user_id)}
+          className="w-8 h-8 rounded-full shadow-md object-cover cursor-pointer"
+        />
+
+        <div
+          className={`p-3 rounded-2xl shadow-md ${
+            mine ? 'bg-blue-600 rounded-br-none' : 'bg-zinc-800 rounded-bl-none'
+          }`}
+        >
           {!mine && (
-            <img
-              src={msg.avatar_url || '/default-avatar.png'}
-              alt={msg.username}
-              className="w-8 h-8 rounded-full shadow-md object-cover"
+            <p className="text-xs text-gray-400 font-semibold mb-1">
+              {msg.username}
+            </p>
+          )}
+
+          {msg.image_url && (
+            <Image
+              src={msg.image_url}
+              alt="upload"
+              width={360}
+              height={240}
+              className="rounded-lg mb-2 object-cover"
             />
           )}
-          <div
-            className={`p-3 rounded-2xl shadow-md ${
-              mine ? 'bg-blue-600 rounded-br-none' : 'bg-zinc-800 rounded-bl-none'
-            }`}
-          >
-            {!mine && (
-              <p className="text-xs text-gray-400 font-semibold mb-1">
-                {msg.username}
-              </p>
-            )}
 
-            {msg.image_url && (
-              <Image
-                src={msg.image_url}
-                alt="upload"
-                width={360}
-                height={240}
-                className="rounded-lg mb-2 object-cover"
-              />
-            )}
-
-            {msg.audio_url && (
-              <div className="mb-2 flex items-center gap-2">
-                <button
-                  onClick={() => playAudio(msg.audio_url!)}
-                  className="px-2 py-1 bg-zinc-900 rounded-md"
-                >
-                  ▶️ Play
-                </button>
-                <span className="text-xs text-gray-400">Voice note</span>
-              </div>
-            )}
-
-            {msg.content && (
-              <p className="text-sm leading-snug whitespace-pre-wrap">
-                {msg.content}
-              </p>
-            )}
-
-            {/* --- Reactions Section --- */}
-            <div className="mt-2 flex flex-wrap gap-2 items-center">
-              {(reactions[msg.id] || []).map((r) => (
-                <span key={r.id} className="text-lg">
-                  {r.emoji}
-                </span>
-              ))}
+          {msg.audio_url && (
+            <div className="mb-2 flex items-center gap-2">
               <button
-                onClick={() => handleAddReaction(msg.id)}
-                className="text-gray-400 hover:text-yellow-400 text-sm"
+                onClick={() => playAudio(msg.audio_url!)}
+                className="px-2 py-1 bg-zinc-900 rounded-md"
               >
-                ➕
+                ▶️ Play
               </button>
+              <span className="text-xs text-gray-400">Voice note</span>
             </div>
+          )}
 
-            <div className="mt-1 text-[11px] text-gray-400">
-              {timeAgo(msg.created_at)}
-            </div>
+          {msg.content && (
+            <p className="text-sm leading-snug whitespace-pre-wrap">
+              {msg.content}
+            </p>
+          )}
+
+          {/* --- Reactions Section --- */}
+          <div className="mt-2 flex flex-wrap gap-2 items-center">
+            {(reactions[msg.id] || []).map((r) => (
+              <span key={r.id} className="text-lg">
+                {r.emoji}
+              </span>
+            ))}
+            <button
+              onClick={() => handleAddReaction(msg.id)}
+              className="text-gray-400 hover:text-yellow-400 text-sm"
+            >
+              ➕
+            </button>
+          </div>
+
+          <div className="mt-1 text-[11px] text-gray-400">
+            {timeAgo(msg.created_at)}
           </div>
         </div>
       </div>
-    )
-  })}
+    </div>
+  )
+})}
 </div>
 
        
@@ -525,14 +541,20 @@ const ProfileModal = () =>
         </div>
       )}
 
-      {/* --- Input area --- */}
+           {/* --- Input area --- */}
       <form
         onSubmit={(e) => sendMessage(e)}
         className="p-4 bg-zinc-950 border-t border-zinc-800 flex flex-col gap-3 z-10"
       >
         {imageUrl && (
           <div className="relative w-fit">
-            <Image src={imageUrl} alt="preview" width={140} height={140} className="rounded-lg mb-2 object-cover" />
+            <Image
+              src={imageUrl}
+              alt="preview"
+              width={140}
+              height={140}
+              className="rounded-lg mb-2 object-cover"
+            />
             <button
               type="button"
               onClick={() => setImageUrl(null)}
@@ -606,8 +628,57 @@ const ProfileModal = () =>
             />
           </div>
         )}
-        <ProfileModal />
       </form>
+
+      {/* --- Profile Modal (moved outside form + high z-index) --- */}
+      {selectedProfile && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999]">
+          <div className="bg-zinc-900 p-6 rounded-2xl w-[90%] max-w-sm text-center shadow-lg relative">
+            <button
+              onClick={closeProfile}
+              className="absolute top-3 right-4 text-gray-400 hover:text-white"
+            >
+              ✖
+            </button>
+
+            <img
+              src={selectedProfile.avatar_url || '/default-avatar.png'}
+              alt="avatar"
+              className="w-24 h-24 rounded-full mx-auto mb-4 border-4 border-blue-500 object-cover"
+            />
+
+            <h2 className="text-xl font-semibold mb-2">
+              {selectedProfile.username}
+            </h2>
+
+            {selectedProfile.wallet_address ? (
+              <p className="text-sm text-gray-400 mb-2">
+                Wallet: {selectedProfile.wallet_address}
+              </p>
+            ) : (
+              <p className="text-sm text-gray-500 mb-2 italic">
+                Wallet not connected
+              </p>
+            )}
+
+            {selectedProfile.id === user.id ? (
+              <button
+                onClick={() => (window.location.href = '/profile')}
+                className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-white mt-3"
+              >
+                Go to My Profile
+              </button>
+            ) : (
+              <button
+                className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg text-white mt-3"
+                onClick={() => alert('💸 Tip feature coming soon!')}
+              >
+                Tip User 💸
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
