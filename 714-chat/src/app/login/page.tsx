@@ -10,11 +10,11 @@ export default function LoginPage() {
   const [isSignUp, setIsSignUp] = useState(false)
 
   const handleGoogleLogin = async () => {
+    const redirectUrl = `${window.location.origin}/chat` // dynamic domain
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo:
-          'https://effective-engine-g4vrqj7q9ggqfpvjq-3000.app.github.dev/chat',
+        redirectTo: redirectUrl,
       },
     })
   }
@@ -22,6 +22,8 @@ export default function LoginPage() {
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault()
     setMessage('Loading...')
+
+    const redirectBase = window.location.origin // dynamic domain
 
     if (isSignUp) {
       const { error } = await supabase.auth.signUp({
@@ -31,8 +33,7 @@ export default function LoginPage() {
       if (error) setMessage('Error: ' + error.message)
       else {
         setMessage('Account created! Redirecting...')
-        window.location.href =
-          'https://effective-engine-g4vrqj7q9ggqfpvjq-3000.app.github.dev/profile'
+        window.location.href = `${redirectBase}/profile`
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({
@@ -40,9 +41,7 @@ export default function LoginPage() {
         password,
       })
       if (error) setMessage('Error: ' + error.message)
-      else
-        window.location.href =
-          'https://effective-engine-g4vrqj7q9ggqfpvjq-3000.app.github.dev/chat'
+      else window.location.href = `${redirectBase}/chat`
     }
   }
 

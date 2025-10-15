@@ -175,7 +175,8 @@ export default function ProfileModal({
   return (
     <AnimatePresence>
       <motion.div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-        <motion.div className="bg-zinc-900 rounded-2xl shadow-2xl p-8 w-full max-w-md text-center border border-zinc-800">
+        <motion.div className="relative bg-zinc-900 rounded-2xl shadow-2xl p-8 w-full max-w-md text-center border border-zinc-800">
+
           <button onClick={onClose} className="absolute top-3 right-4 text-gray-400 hover:text-white text-lg">✖</button>
 
           <h2 className="text-xl font-bold mb-5 text-white">{isOwner ? 'Your Profile' : 'User Profile'}</h2>
