@@ -588,13 +588,13 @@ useEffect(() => {
           </div>
         )}
       </form>
-{/* --- Profile Modal --- */}
 {selectedProfile && (
   <ProfileModal
     userId={selectedProfile.id}
     onClose={() => setSelectedProfile(null)}
   />
 )}
+
 </div>
 )
 }
