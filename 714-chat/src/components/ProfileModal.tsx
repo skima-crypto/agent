@@ -142,9 +142,20 @@ const { switchChain } = useSwitchChain()
       return
     }
     if (!amount || parseFloat(amount) <= 0) {
-      alert('Enter a valid amount.')
-      return
-    }
+  alert('Enter a valid amount.')
+  return
+}
+
+// ✅ Strict limits
+if (selectedToken.symbol === 'ETH' && parseFloat(amount) > 0.035) {
+  alert('❌ Max tip for ETH is 0.035 ETH.')
+  return
+}
+if (selectedToken.symbol === 'USDC' && parseFloat(amount) > 100) {
+  alert('❌ Max tip for USDC is 100 USDC.')
+  return
+}
+
 
     try {
       if (!isConnected) {
