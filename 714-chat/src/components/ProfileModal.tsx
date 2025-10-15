@@ -80,7 +80,7 @@ export default function ProfileModal({
     )
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999]">
+    <div className="flex flex-col h-screen bg-black text-white">
       <div className="bg-zinc-900 rounded-2xl shadow-lg p-8 w-full max-w-md text-center relative">
         <button
           onClick={onClose}

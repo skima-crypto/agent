@@ -389,9 +389,13 @@ useEffect(() => {
         <Image src="/714BG.jpg" alt="bg" fill className="object-cover opacity-10" />
       </div>
 
-      <header className="relative z-10 bg-[#1a1a1a] border-b border-zinc-800 py-3 text-center font-semibold text-lg shadow-md">
-        💬 714 Global Chat
-      </header>
+      <header
+  onClick={() => openUserProfile(user.id)}
+  className="relative z-10 bg-[#1a1a1a] border-b border-zinc-800 py-3 text-center font-semibold text-lg shadow-md cursor-pointer hover:text-blue-400 transition"
+>
+  💬 714 Global Chat (click to view your profile)
+</header>
+
 
       {/* --- Messages List --- */}
 <div
