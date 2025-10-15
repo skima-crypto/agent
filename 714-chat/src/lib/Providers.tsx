@@ -1,33 +1,29 @@
 'use client'
 
-import React from 'react'
-import {
-  WagmiProvider,
-  createConfig,
-  http
-} from 'wagmi'
-import { mainnet } from 'wagmi/chains'
-import { RainbowKitProvider, getDefaultConfig } from '@rainbow-me/rainbowkit'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-
 import '@rainbow-me/rainbowkit/styles.css'
-
-const queryClient = new QueryClient()
+import {
+  RainbowKitProvider,
+  getDefaultConfig,
+  darkTheme,
+} from '@rainbow-me/rainbowkit'
+import { WagmiProvider } from 'wagmi'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { base } from 'wagmi/chains'
 
 const config = getDefaultConfig({
   appName: '714 Chat',
-  projectId: '714-app',
-  chains: [mainnet],
-  transports: {
-    [mainnet.id]: http(),
-  },
+  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
+  chains: [base],
+  ssr: true,
 })
 
-export default function Providers({ children }: { children: React.ReactNode }) {
+const queryClient = new QueryClient()
+
+export function WalletProvider({ children }: { children: React.ReactNode }) {
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider>{children}</RainbowKitProvider>
+        <RainbowKitProvider theme={darkTheme()}>{children}</RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
   )
