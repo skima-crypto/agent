@@ -5,6 +5,9 @@ import { supabase } from '@/lib/supabaseClient'
 import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ethers } from 'ethers'
+import { useAccount, useChainId, useSwitchChain } from 'wagmi'
+import { base } from 'wagmi/chains'
+import { ConnectButton } from '@rainbow-me/rainbowkit'
 
 // ✅ Tipper contract details
 const TIPPER_ADDRESS = '0xd6cD246C2207eda9b75779F03677de4a8DBa2309'
@@ -34,12 +37,18 @@ export default function ProfileModal({
   const [saving, setSaving] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
-  // tip state
+  // Tip state
   const [showTipModal, setShowTipModal] = useState(false)
   const [selectedToken, setSelectedToken] = useState(TOKENS[0])
   const [amount, setAmount] = useState('')
   const [sending, setSending] = useState(false)
   const [txHash, setTxHash] = useState<string | null>(null)
+
+// Wallet hooks (updated for wagmi v2+)
+const { address, isConnected } = useAccount()
+const chainId = useChainId()
+const { switchChain } = useSwitchChain()
+
 
   // --- Fetch current logged-in user ---
   useEffect(() => {
@@ -138,6 +147,16 @@ export default function ProfileModal({
     }
 
     try {
+      if (!isConnected) {
+        alert('Please connect your wallet first.')
+        return
+      }
+
+      if (chainId !== base.id) {
+  await switchChain({ chainId: base.id })
+}
+
+
       setSending(true)
       setTxHash(null)
 
@@ -176,10 +195,14 @@ export default function ProfileModal({
     <AnimatePresence>
       <motion.div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
         <motion.div className="relative bg-zinc-900 rounded-2xl shadow-2xl p-8 w-full max-w-md text-center border border-zinc-800">
-
           <button onClick={onClose} className="absolute top-3 right-4 text-gray-400 hover:text-white text-lg">✖</button>
 
           <h2 className="text-xl font-bold mb-5 text-white">{isOwner ? 'Your Profile' : 'User Profile'}</h2>
+
+          {/* ✅ Wallet Connect Button */}
+          <div className="mb-4 flex justify-center">
+            <ConnectButton showBalance={false} chainStatus="icon" />
+          </div>
 
           {/* Avatar */}
           {avatarUrl ? (
@@ -190,7 +213,6 @@ export default function ProfileModal({
             </div>
           )}
 
-          {/* Upload button */}
           {isOwner && (
             <>
               <label htmlFor="avatar-upload" className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">
@@ -200,7 +222,6 @@ export default function ProfileModal({
             </>
           )}
 
-          {/* Username */}
           {isOwner ? (
             <input
               type="text"
@@ -213,7 +234,6 @@ export default function ProfileModal({
             <p className="text-lg font-semibold text-white mt-4 mb-2">{username || 'No username set'}</p>
           )}
 
-          {/* Wallet field (editable) */}
           {isOwner ? (
             <input
               type="text"
@@ -229,7 +249,6 @@ export default function ProfileModal({
             </p>
           )}
 
-          {/* Buttons */}
           {isOwner ? (
             <button
               onClick={saveProfile}
