@@ -44,6 +44,7 @@ export default function ChatPage() {
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -253,6 +254,51 @@ export default function ChatPage() {
       supabase.removeChannel(channel);
     };
   }, [user]);
+
+  // --- Presence: track who is online ---
+useEffect(() => {
+  if (!user) return;
+
+  // Create a Realtime presence channel
+  const presenceChannel = supabase.channel("chat-presence", {
+    config: {
+      presence: {
+        key: user.id, // unique user key
+      },
+    },
+  });
+
+  // Track user presence data
+  presenceChannel.on("presence", { event: "sync" }, () => {
+    const state = presenceChannel.presenceState();
+    const usersOnline = Object.values(state)
+      .flat()
+      .map((u: any) => u.user);
+    setOnlineUsers(usersOnline);
+  });
+
+  // Subscribe to presence events
+  presenceChannel.subscribe(async (status) => {
+    if (status === "SUBSCRIBED") {
+      await presenceChannel.track({
+        user: {
+          id: user.id,
+          username:
+            profile?.username ||
+            user.user_metadata?.full_name ||
+            user.email.split("@")[0],
+          avatar_url: profile?.avatar_url || user.user_metadata?.avatar_url || "",
+        },
+      });
+    }
+  });
+
+  // Cleanup on unmount
+  return () => {
+    supabase.removeChannel(presenceChannel);
+  };
+}, [user, profile]);
+
 
   // --- Send Message ---
   const sendMessage = async (e?: React.FormEvent) => {
@@ -664,10 +710,10 @@ return (
             })}
           </div>
 
-          {/* Sticky input area (desktop) */}
-          <div className="hidden sm:block bg-white/3 border-t border-zinc-800 p-4">
+          {/* Sticky input area (mobile + desktop friendly) */}
+          <div className="bg-white/5 border-t border-zinc-800 p-3 sm:p-4 sticky bottom-0">
             {replyTo && (
-              <div className="bg-white/5 p-2 rounded-md mb-2 text-sm flex items-center justify-between">
+              <div className="bg-white/10 p-2 rounded-md mb-2 text-sm flex items-center justify-between">
                 <div>
                   Replying to <strong>{replyTo.username}</strong> —{" "}
                   <span className="italic">{replyTo.content.slice(0, 120)}</span>
@@ -684,7 +730,13 @@ return (
             {imageUrl && (
               <div className="flex items-center gap-3 mb-3">
                 <div className="relative w-28 h-20 rounded-md overflow-hidden">
-                  <Image src={imageUrl} alt="preview" width={112} height={80} className="object-cover" />
+                  <Image
+                    src={imageUrl}
+                    alt="preview"
+                    width={112}
+                    height={80}
+                    className="object-cover"
+                  />
                   <button
                     type="button"
                     onClick={() => setImageUrl(null)}
@@ -698,59 +750,77 @@ return (
             )}
 
             <form onSubmit={sendMessage} className="flex flex-col gap-3">
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowEmoji((v) => !v)}
-                  className="p-2 rounded-md hover:bg-white/5"
-                  aria-label="Emoji picker"
-                >
-                  😊
-                </button>
-
-                <label className="cursor-pointer px-3 py-2 bg-white/5 rounded-md text-sm flex items-center gap-2">
-                  Upload
-                  <input
-                    type="file"
-                    accept="image/*,video/*"
-                    onChange={handleImageUpload}
-                    className="hidden"
-                  />
-                </label>
-
-                {!isRecording ? (
+              <div className="relative flex items-center w-full bg-zinc-800/60 rounded-full border border-zinc-700 focus-within:ring-2 focus-within:ring-blue-600">
+                <div className="absolute left-3 flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={startRecording}
-                    className="px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-500"
-                    title="Start recording"
+                    onClick={() => setShowEmoji((v) => !v)}
+                    className="text-zinc-400 hover:text-blue-400 transition"
+                    aria-label="Emoji picker"
                   >
-                    ◉
+                    😊
                   </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={stopRecording}
-                    className="px-3 py-2 bg-red-400 text-white rounded-md hover:bg-red-300 flex items-center gap-2"
-                    title="Stop recording"
+
+                  <label
+                    className="cursor-pointer text-zinc-400 hover:text-blue-400 transition"
+                    title="Upload file"
                   >
-                    ■ <span className="text-xs">{formatTime(recordingTime)}</span>
-                  </button>
-                )}
+                    <input
+                      type="file"
+                      accept="image/*,video/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                    />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M12 4v16m8-8H4"
+                      />
+                    </svg>
+                  </label>
+
+                  {!isRecording ? (
+                    <button
+                      type="button"
+                      onClick={startRecording}
+                      className="text-red-500 hover:text-red-400 transition"
+                      title="Start recording"
+                    >
+                      ◉
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={stopRecording}
+                      className="text-red-300 hover:text-red-200 transition flex items-center gap-1"
+                      title="Stop recording"
+                    >
+                      ■ <span className="text-xs">{formatTime(recordingTime)}</span>
+                    </button>
+                  )}
+                </div>
 
                 <input
                   type="text"
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
                   placeholder="Type your message..."
-                  className="flex-1 bg-transparent border border-zinc-800 text-white rounded-full px-4 py-2 focus:outline-none"
+                  className="w-full bg-transparent text-white pl-28 pr-16 py-3 rounded-full focus:outline-none placeholder-zinc-500"
                 />
 
                 <button
                   type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-full font-semibold"
+                  className="absolute right-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full font-semibold transition active:scale-95"
                 >
-                  Send
+                  ➤
                 </button>
               </div>
 
@@ -758,7 +828,8 @@ return (
                 <div className="flex items-center gap-3 text-sm text-red-400">
                   <div className="flex items-center gap-2">
                     <span className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
-                    Recording... <span className="ml-2 font-mono">{formatTime(recordingTime)}</span>
+                    Recording...{" "}
+                    <span className="ml-2 font-mono">{formatTime(recordingTime)}</span>
                   </div>
                 </div>
               )}
@@ -766,20 +837,38 @@ return (
               {showEmoji && (
                 <div className="mt-2">
                   <EmojiPicker
-                    onEmojiClick={(emojiData) => setNewMessage((prev) => prev + emojiData.emoji)}
+                    onEmojiClick={(emojiData) =>
+                      setNewMessage((prev) => prev + emojiData.emoji)
+                    }
                     theme={Theme.DARK}
                   />
                 </div>
               )}
             </form>
           </div>
-        </div>
+        </div> {/* closes chat panel */}
 
         {/* Right panel */}
         <aside className="w-full lg:w-80 flex-shrink-0 hidden lg:flex flex-col gap-4">
           <div className="p-4 rounded-2xl bg-white/4 shadow-inner">
             <h4 className="text-sm text-gray-300 font-semibold mb-2">Active users</h4>
-            <p className="text-xs text-gray-400">Online presence not configured</p>
+            {onlineUsers.length > 0 ? (
+              <ul className="space-y-2">
+                {onlineUsers.map((u) => (
+                  <li key={u.id} className="flex items-center gap-2 text-sm text-gray-200">
+                    <img
+                      src={u.avatar_url || "/default-avatar.png"}
+                      alt=""
+                      className="w-6 h-6 rounded-full object-cover"
+                    />
+                    <span>{u.username}</span>
+                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse ml-auto"></span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-gray-400">No one online yet...</p>
+            )}
           </div>
 
           <div className="p-4 rounded-2xl bg-white/4">
@@ -791,16 +880,23 @@ return (
             </ul>
           </div>
         </aside>
-      </div>
-    </div>
+      </div> {/* closes inner chat container */}
+    </div> {/* closes main content */}
 
     {/* Modals */}
     {selectedProfile && (
-      <ProfileModal userId={selectedProfile.id} onClose={() => setSelectedProfile(null)} />
+      <ProfileModal
+        userId={selectedProfile.id}
+        onClose={() => setSelectedProfile(null)}
+      />
     )}
+
     {imageViewerUrl && (
-      <ImageViewerModal imageUrl={imageViewerUrl} onClose={() => setImageViewerUrl(null)} />
+      <ImageViewerModal
+        imageUrl={imageViewerUrl}
+        onClose={() => setImageViewerUrl(null)}
+      />
     )}
-  </div>
+  </div> 
 );
-} 
+}  
