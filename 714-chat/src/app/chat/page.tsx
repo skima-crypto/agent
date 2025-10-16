@@ -50,59 +50,63 @@ export default function ChatPage() {
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [gifResults, setGifResults] = useState<any[]>([]);
   const [showGifPicker, setShowGifPicker] = useState(false);
+
+  // Recording states
   const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0); // seconds
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<any>(null); // holds profile object from openUserProfile
   const [imageViewerUrl, setImageViewerUrl] = useState<string | null>(null);
+  const recordingTimerRef = useRef<number | null>(null);
 
   const timeAgo = (d: string) => dayjs(d).fromNow();
 
   // --- openUserProfile uses existing logic (fetches profile object and sets selectedProfile) ---
   const openUserProfile = async (userId: string) => {
-  try {
-    if (!userId) {
-      console.warn("⚠️ No userId provided to openUserProfile");
-      return;
+    try {
+      if (!userId) {
+        console.warn("⚠️ No userId provided to openUserProfile");
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, username, avatar_url, wallet_address")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (error) {
+        console.error("Supabase error:", error.message || error);
+        return;
+      }
+
+      if (!data) {
+        console.warn("⚠️ No profile found for userId:", userId);
+        return;
+      }
+
+      setSelectedProfile(data);
+    } catch (err: any) {
+      console.error("Unexpected error loading profile:", err.message || err);
     }
+  };
 
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id, username, avatar_url, wallet_address")
-      .eq("id", userId)
-      .maybeSingle();
-
-    if (error) {
-      console.error("Supabase error:", error.message || error);
-      return;
-    }
-
-    if (!data) {
-      console.warn("⚠️ No profile found for userId:", userId);
-      return;
-    }
-
-    console.log("✅ Loaded profile:", data);
-    setSelectedProfile(data);
-  } catch (err: any) {
-    console.error("Unexpected error loading profile:", err.message || err);
-  }
-};
-
-const handleOpenProfile = useCallback(
-  (id: string | null) => {
-    if (id) openUserProfile(id);
-  },
-  [openUserProfile]
-);
-
+  const handleOpenProfile = useCallback(
+    (id: string | null) => {
+      if (id) openUserProfile(id);
+    },
+    [openUserProfile]
+  );
 
   // --- Ensure buckets exist ---
   const ensureBucket = async (bucket: string) => {
     try {
       await supabase.storage.createBucket(bucket, { public: true });
-    } catch {}
+    } catch {
+      // ignore; bucket likely already exists
+    }
   };
 
   // --- Initialize user & profile ---
@@ -111,7 +115,7 @@ const handleOpenProfile = useCallback(
       const { data } = await supabase.auth.getSession();
       const sessionUser = data.session?.user;
       if (!sessionUser) {
-        window.location.href = "/login";
+        window.location.href = "/home";
         return;
       }
       setUser(sessionUser);
@@ -129,8 +133,6 @@ const handleOpenProfile = useCallback(
     };
     init();
   }, []);
-
-
 
   // --- Load messages & subscribe to realtime updates ---
   useEffect(() => {
@@ -178,9 +180,8 @@ const handleOpenProfile = useCallback(
                 default:
                   updated = prev;
               }
-              // Also keep filteredMessages in sync (simple approach: re-filter with last search term if any)
+              // Also keep filteredMessages in sync
               setFilteredMessages((fm) => {
-                // If there's currently a search term, keep filtering, else mirror updated
                 const input = (document.querySelector<HTMLInputElement>('[data-chat-search="true"]')?.value || "").trim();
                 if (!input) return updated;
                 const lower = input.toLowerCase();
@@ -321,50 +322,111 @@ const handleOpenProfile = useCallback(
     }
   };
 
-  // --- Voice Recording ---
+  // --- Voice Recording (improved flow) ---
   const startRecording = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert("Microphone access not supported in this browser.");
+      return;
+    }
+
     try {
+      // Try using permissions API if available (graceful fallback if not supported)
+      if ((navigator as any).permissions && (navigator as any).permissions.query) {
+        try {
+          const perm = await (navigator as any).permissions.query({ name: "microphone" });
+          if (perm.state === "denied") {
+            alert("Microphone permission is blocked. Please enable it in your browser settings.");
+            return;
+          }
+          // if prompt or granted, continue to request getUserMedia
+        } catch {
+          // ignore -- continue to getUserMedia
+        }
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      if (!stream) return alert("Microphone not found");
+      if (!stream) {
+        alert("Microphone not found or permission denied.");
+        return;
+      }
 
       const mr = new MediaRecorder(stream);
       mediaRecorderRef.current = mr;
       audioChunksRef.current = [];
 
       mr.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+        if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
       };
 
       mr.onstop = async () => {
+        // stop recording timer
+        if (recordingTimerRef.current) {
+          window.clearInterval(recordingTimerRef.current);
+          recordingTimerRef.current = null;
+        }
+        setRecordingTime(0);
+
+        // assemble blob
         const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+
+        // small UX: create a local preview so user hears it while upload is happening
+        const objectUrl = URL.createObjectURL(blob);
+
+        // upload to supabase and set audioUrl (preserve existing send flow)
         const fileName = `${user.id}-voice-${Date.now()}.webm`;
         const bucket = "chat-uploads";
 
         try {
+          setUploading(true);
           await ensureBucket(bucket);
+
+          // supabase client can accept Blob directly
           const { error } = await supabase.storage.from(bucket).upload(fileName, blob, { upsert: true });
           if (error) throw error;
           const { data } = supabase.storage.from(bucket).getPublicUrl(fileName);
           setAudioUrl(data.publicUrl);
+
+          // Send message now that audio_url is available (keep previous behavior)
           await sendMessage();
         } catch (err: any) {
-          alert("Voice upload failed: " + (err.message || err));
+          console.error("Voice upload failed", err);
+          alert("Voice upload failed: " + (err?.message || err));
+        } finally {
+          setUploading(false);
+          // revoke local object url after a short delay to avoid leaks
+          setTimeout(() => URL.revokeObjectURL(objectUrl), 30_000);
         }
       };
 
+      // start recorder
       mr.start();
       setIsRecording(true);
+      setRecordingTime(0);
+
+      // start visual timer
+      recordingTimerRef.current = window.setInterval(() => {
+        setRecordingTime((s) => s + 1);
+      }, 1000);
     } catch (err: any) {
-      console.error(err);
-      alert("Microphone access failed.");
+      console.error("startRecording error:", err);
+      alert("Microphone access failed. Please allow microphone permissions.");
     }
   };
 
   const stopRecording = () => {
     const mr = mediaRecorderRef.current;
     if (!mr) return;
-    mr.stop();
-    setIsRecording(false);
+    try {
+      mr.stop();
+      // stop all tracks (release mic)
+      const tracks = (mr as any).stream?.getTracks?.();
+      if (tracks && tracks.length) tracks.forEach((t: MediaStreamTrack) => t.stop());
+    } catch (err) {
+      console.warn("stopRecording error:", err);
+    } finally {
+      mediaRecorderRef.current = null;
+      setIsRecording(false);
+    }
   };
 
   // --- Play Audio ---
@@ -422,178 +484,265 @@ const handleOpenProfile = useCallback(
     setFilteredMessages(filtered);
   };
 
+  // small helper to format recording timer mm:ss
+  const formatTime = (s: number) => {
+    const mm = Math.floor(s / 60)
+      .toString()
+      .padStart(2, "0");
+    const ss = Math.floor(s % 60)
+      .toString()
+      .padStart(2, "0");
+    return `${mm}:${ss}`;
+  };
+
   return (
-    <div className={`${styles.chatContainer} min-h-screen flex flex-col`}>
-      {/* Background image area (only chat space uses module css background) */}
-      <div className="z-10">
-        {/* header + theme toggle */}
-        <div className="flex items-center justify-between">
+    <div className={`min-h-screen flex flex-col bg-slate-900 text-white ${styles.chatContainer}`}>
+      {/* Header */}
+      <div className="w-full sticky top-0 z-30 backdrop-blur-sm bg-white/5 border-b border-zinc-800">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
           <ChatHeader
             setSelectedProfile={(id: string | null) => {
-              // when header's profile button is clicked, open profile using openUserProfile so selectedProfile has object
               if (id) openUserProfile(id);
             }}
             currentUserId={user?.id}
             onSearch={handleSearch}
           />
-          <div className="pr-3">
+          <div className="flex items-center gap-2">
             <ThemeToggle />
           </div>
         </div>
       </div>
 
-      {/* Messages list (chatSpace uses background image placeholder inside chat.module.css) */}
-      <div ref={messagesRef} className={`${styles.chatSpace} flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-zinc-700 relative`}>
-        {filteredMessages.map((msg) => {
-          const mine = msg.user_id === user?.id;
-          return (
-            <div key={msg.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-              <div className={`flex max-w-[75%] items-end gap-2 ${mine ? "flex-row-reverse text-right" : ""}`}>
-                {/* Avatar - shown for both mine and others and clickable */}
-                <img
-                  src={msg.avatar_url || "/default-avatar.png"}
-                  alt={`${msg.username || "User"} avatar`}
-                  role="button"
-                  onClick={() => openUserProfile(msg.user_id)}
-                  className="w-8 h-8 rounded-full shadow-md object-cover cursor-pointer"
-                />
+      {/* Main content */}
+      <div className="flex-1 overflow-hidden">
+        <div className="max-w-6xl mx-auto h-full flex flex-col lg:flex-row gap-4 px-4 py-6">
+          {/* Left / Chat panel */}
+          <div className="flex-1 flex flex-col rounded-2xl overflow-hidden shadow-xl bg-[linear-gradient(180deg,_rgba(255,255,255,0.02),_rgba(255,255,255,0.01))]">
+            {/* Messages area */}
+            <div
+              ref={messagesRef}
+              className={`flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-zinc-700 ${styles.chatSpace}`}
+              style={{ minHeight: 0 }}
+            >
+              {filteredMessages.length === 0 && (
+                <div className="text-center text-gray-400 mt-12">
+                  No messages yet — start the conversation!
+                </div>
+              )}
 
-                <div
-                  className={`p-3 rounded-2xl shadow-md ${mine ? "bg-blue-600 rounded-br-none" : "bg-zinc-800 rounded-bl-none"}`}
-                >
-                  {!mine && (
-                    <p
-                      className="text-xs text-gray-400 font-semibold mb-1 cursor-pointer hover:text-blue-400"
-                      onClick={() => openUserProfile(msg.user_id)}
-                    >
-                      {msg.username}
-                    </p>
-                  )}
-
-                  {/* Image (click to open viewer) */}
-                  {msg.image_url && (
-                    // Use a simple clickable image that opens the viewer
-                    <div className="mb-2">
-                      <Image
-                        src={msg.image_url}
-                        alt="upload"
-                        width={360}
-                        height={240}
-                        className="rounded-lg mb-2 object-cover cursor-pointer"
-                        onClick={() => setImageViewerUrl(msg.image_url || null)}
-                      />
-                    </div>
-                  )}
-
-                  {/* Audio */}
-                  {msg.audio_url && (
-                    <div className="mb-2 flex items-center gap-2">
-                      <button onClick={() => playAudio(msg.audio_url!)} className="px-2 py-1 bg-zinc-900 rounded-md">
-                        ▶️ Play
+              {filteredMessages.map((msg) => {
+                const mine = msg.user_id === user?.id;
+                return (
+                  <div key={msg.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                    <div className={`flex max-w-[85%] items-end gap-3 ${mine ? "flex-row-reverse text-right" : ""}`}>
+                      {/* Avatar */}
+                      <button
+                        onClick={() => openUserProfile(msg.user_id)}
+                        aria-label={`Open ${msg.username}'s profile`}
+                        className="w-10 h-10 flex-shrink-0 rounded-full overflow-hidden ring-1 ring-white/5"
+                      >
+                        <img
+                          src={msg.avatar_url || "/default-avatar.png"}
+                          alt={`${msg.username || "User"} avatar`}
+                          className="w-full h-full object-cover"
+                        />
                       </button>
-                      <span className="text-xs text-gray-400">Voice note</span>
+
+                      <div
+                        className={`relative p-4 rounded-2xl shadow-md ${mine ? "bg-gradient-to-br from-blue-600 to-blue-500 text-white rounded-br-none" : "bg-white/5 text-gray-100 rounded-bl-none"}`}
+                        style={{ backdropFilter: "blur(8px)" }}
+                      >
+                        {!mine && (
+                          <div
+                            className="text-xs text-gray-300 font-semibold mb-1 cursor-pointer hover:text-blue-300"
+                            onClick={() => openUserProfile(msg.user_id)}
+                            role="button"
+                          >
+                            {msg.username}
+                          </div>
+                        )}
+
+                        {/* Image (click to open viewer) */}
+                        {msg.image_url && (
+                          <div className="mb-2">
+                            <Image
+                              src={msg.image_url}
+                              alt="upload"
+                              width={360}
+                              height={240}
+                              className="rounded-lg mb-2 object-cover cursor-pointer"
+                              onClick={() => setImageViewerUrl(msg.image_url || null)}
+                            />
+                          </div>
+                        )}
+
+                        {/* Audio */}
+                        {msg.audio_url && (
+                          <div className="mb-2 flex flex-col gap-2">
+                            <div className="flex items-center gap-3">
+                              <button
+                                onClick={() => playAudio(msg.audio_url!)}
+                                className="px-3 py-1 rounded-md bg-white/6 hover:bg-white/10"
+                              >
+                                ▶️ Play
+                              </button>
+                              <span className="text-xs text-gray-300">Voice note</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Text */}
+                        {msg.content && (
+                          <p className="text-sm leading-snug whitespace-pre-wrap">
+                            {msg.content}
+                          </p>
+                        )}
+
+                        {/* Reactions */}
+                        <div className="mt-3 flex items-center gap-2">
+                          {(reactions[msg.id] || []).map((r) => (
+                            <span key={r.id} className="text-lg">
+                              {r.emoji}
+                            </span>
+                          ))}
+                          <button onClick={() => handleAddReaction(msg.id)} className="text-gray-300 hover:text-yellow-400 text-sm">
+                            ➕
+                          </button>
+                        </div>
+
+                        <div className="mt-2 text-[11px] text-gray-400">
+                          {timeAgo(msg.created_at)}
+                        </div>
+                      </div>
                     </div>
-                  )}
+                  </div>
+                );
+              })}
+            </div>
 
-                  {/* Text */}
-                  {msg.content && (
-                    <p className="text-sm leading-snug whitespace-pre-wrap">
-                      {msg.content}
-                    </p>
-                  )}
+            {/* Sticky input area */}
+            <div className="bg-white/3 border-t border-zinc-800 p-4">
+              {replyTo && (
+                <div className="bg-white/5 p-2 rounded-md mb-2 text-sm flex items-center justify-between">
+                  <div>
+                    Replying to <strong>{replyTo.username}</strong> —{" "}
+                    <span className="italic">{replyTo.content.slice(0, 120)}</span>
+                  </div>
+                  <button className="ml-2 text-red-400 hover:text-red-300" onClick={() => setReplyTo(null)}>
+                    ✖ Cancel
+                  </button>
+                </div>
+              )}
 
-                  {/* --- Reactions Section --- */}
-                  <div className="mt-2 flex flex-wrap gap-2 items-center">
-                    {(reactions[msg.id] || []).map((r) => (
-                      <span key={r.id} className="text-lg">
-                        {r.emoji}
-                      </span>
-                    ))}
-                    <button onClick={() => handleAddReaction(msg.id)} className="text-gray-400 hover:text-yellow-400 text-sm">
-                      ➕
+              {/* preview image */}
+              {imageUrl && (
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="relative w-28 h-20 rounded-md overflow-hidden">
+                    <Image src={imageUrl} alt="preview" width={112} height={80} className="object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setImageUrl(null)}
+                      className="absolute top-1 right-1 bg-black/60 text-white px-1 rounded"
+                      aria-label="Remove image preview"
+                    >
+                      ✖
                     </button>
                   </div>
-
-                  <div className="mt-1 text-[11px] text-gray-400">
-                    {timeAgo(msg.created_at)}
-                  </div>
                 </div>
-              </div>
+              )}
+
+              <form onSubmit={(e) => sendMessage(e)} className="flex flex-col gap-3">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowEmoji((v) => !v)}
+                    className="p-2 rounded-md hover:bg-white/5"
+                    aria-label="Emoji picker"
+                  >
+                    😊
+                  </button>
+
+                  <label className="cursor-pointer px-3 py-2 bg-white/5 rounded-md text-sm flex items-center gap-2">
+                    Upload
+                    <input type="file" accept="image/*,video/*" onChange={handleImageUpload} className="hidden" />
+                  </label>
+
+                  {!isRecording ? (
+                    <button
+                      type="button"
+                      onClick={startRecording}
+                      className="px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-500"
+                      title="Start recording"
+                    >
+                      ◉
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={stopRecording}
+                      className="px-3 py-2 bg-red-400 text-white rounded-md hover:bg-red-300 flex items-center gap-2"
+                      title="Stop recording"
+                    >
+                      ■ <span className="text-xs">{formatTime(recordingTime)}</span>
+                    </button>
+                  )}
+
+                  <input
+                    type="text"
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="Type your message..."
+                    className="flex-1 bg-transparent border border-zinc-800 text-white rounded-full px-4 py-2 focus:outline-none"
+                  />
+
+                  <button type="submit" className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-full font-semibold">
+                    Send
+                  </button>
+                </div>
+
+                {/* Recording indicator */}
+                {isRecording && (
+                  <div className="flex items-center gap-3 text-sm text-red-400">
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
+                      Recording... <span className="ml-2 font-mono">{formatTime(recordingTime)}</span>
+                    </div>
+                  </div>
+                )}
+
+                {showEmoji && (
+                  <div className="mt-2">
+                    <EmojiPicker
+                      onEmojiClick={(emojiData) => setNewMessage((prev) => prev + emojiData.emoji)}
+                      theme={Theme.DARK}
+                    />
+                  </div>
+                )}
+              </form>
             </div>
-          );
-        })}
+          </div>
+
+          {/* Right panel (optional: user list / info) - collapses on small screens */}
+          <aside className="w-full lg:w-80 flex-shrink-0 hidden lg:flex flex-col gap-4">
+            <div className="p-4 rounded-2xl bg-white/4 shadow-inner">
+              <h4 className="text-sm text-gray-300 font-semibold mb-2">Active users</h4>
+              {/* Placeholder - if you have presence logic, map it here */}
+              <p className="text-xs text-gray-400">Online presence not configured</p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white/4">
+              <h4 className="text-sm text-gray-300 font-semibold mb-2">Chat tips</h4>
+              <ul className="text-xs text-gray-400 space-y-1">
+                <li>• Use <strong>↩️ reply</strong> to refer to messages</li>
+                <li>• Press ◉ to record voice notes</li>
+                <li>• Click avatars to view profiles</li>
+              </ul>
+            </div>
+          </aside>
+        </div>
       </div>
 
-      {/* Reply preview */}
-      {replyTo && (
-        <div className="bg-zinc-900 p-2 text-sm text-gray-300 border-t border-zinc-800">
-          Replying to <strong>{replyTo.username}</strong> —{" "}
-          <span className="italic">{replyTo.content.slice(0, 120)}</span>
-          <button className="ml-2 text-red-400 hover:text-red-300" onClick={() => setReplyTo(null)}>
-            ✖ Cancel
-          </button>
-        </div>
-      )}
-
-      {/* Input area */}
-      <form onSubmit={(e) => sendMessage(e)} className={`${styles.inputArea} p-4 bg-zinc-950 border-t border-zinc-800 flex flex-col gap-3 z-10`}>
-        {imageUrl && (
-          <div className="relative w-fit">
-            <Image src={imageUrl} alt="preview" width={140} height={140} className="rounded-lg mb-2 object-cover cursor-pointer" onClick={() => setImageViewerUrl(imageUrl)} />
-            <button
-              type="button"
-              onClick={() => setImageUrl(null)}
-              className="absolute top-0 right-0 bg-black/60 text-white px-1 rounded"
-            >
-              ✖
-            </button>
-          </div>
-        )}
-
-        <div className="flex items-center gap-3">
-          <button type="button" onClick={() => setShowEmoji((v) => !v)} className="text-2xl">
-            😊
-          </button>
-
-          <label className="cursor-pointer px-2 py-1 bg-zinc-900 rounded">
-            Upload
-            <input type="file" accept="image/*,video/*" onChange={handleImageUpload} className="hidden" />
-          </label>
-
-          {!isRecording ? (
-            <button type="button" onClick={startRecording} className="px-3 py-2 bg-red-600 rounded text-white">
-              ◉
-            </button>
-          ) : (
-            <button type="button" onClick={stopRecording} className="px-3 py-2 bg-red-400 rounded text-white">
-              ■
-            </button>
-          )}
-
-          <input
-            type="text"
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Type your message..."
-            className="flex-1 bg-zinc-900 border border-zinc-800 text-white rounded-xl px-4 py-2"
-          />
-
-          <button type="submit" className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-xl font-semibold">
-            Send
-          </button>
-        </div>
-
-        {showEmoji && (
-          <div className="mt-2">
-            <EmojiPicker
-              onEmojiClick={(emojiData) => setNewMessage((prev) => prev + emojiData.emoji)}
-              theme={Theme.DARK}
-            />
-          </div>
-        )}
-      </form>
-
-      {/* Profile modal (selectedProfile is the profile object set by openUserProfile) */}
+      {/* Profile modal */}
       {selectedProfile && (
         <ProfileModal userId={selectedProfile.id} onClose={() => setSelectedProfile(null)} />
       )}
