@@ -1,150 +1,225 @@
-'use client'
+'use client';
 
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
-import Image from 'next/image'
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import Image from 'next/image';
+import { useRouter } from 'next/navigation';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { useAccount } from 'wagmi';
+import ChatHeader from '@/components/ChatHeader';
+import Sidebar from '@/components/Sidebar'; // adjust path if needed
 
 export default function ProfilePage() {
-  const [user, setUser] = useState<any>(null)
-  const [username, setUsername] = useState('')
-  const [avatarUrl, setAvatarUrl] = useState('')
-  const [uploading, setUploading] = useState(false)
-  const [saving, setSaving] = useState(false)
+  const [user, setUser] = useState<any>(null);
+  const [username, setUsername] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [walletAddress, setWalletAddress] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
+  const router = useRouter();
+  const { address } = useAccount();
+
+  // Auto-fill wallet when connected
+  useEffect(() => {
+    if (address) setWalletAddress(address);
+  }, [address]);
+
+  // Load user + existing profile
   useEffect(() => {
     const loadUser = async () => {
-      const { data } = await supabase.auth.getUser()
-      if (!data.user) {
-        window.location.href = '/login'
-        return
+      const { data, error } = await supabase.auth.getUser();
+      if (error) {
+        console.error('Auth getUser error:', error);
+        router.push('/home');
+        return;
       }
-      setUser(data.user)
+      if (!data.user) {
+        router.push('/home');
+        return;
+      }
+      setUser(data.user);
 
-      const { data: profile } = await supabase
+      // Load profile from DB
+      const { data: profile, error: profileErr } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', data.user.id)
-        .single()
+        .maybeSingle();
 
-      if (profile) {
-        setUsername(profile.username || '')
-        setAvatarUrl(profile.avatar_url || '')
+      if (profileErr) {
+        console.error('Error fetching profile:', profileErr);
+      } else if (profile) {
+        setUsername(profile.username || '');
+        setAvatarUrl(profile.avatar_url || '');
+        setWalletAddress(profile.wallet_address || '');
       }
-    }
-    loadUser()
-  }, [])
+    };
 
+    loadUser();
+  }, [router]);
+
+  // Upload avatar to storage, save public URL and persist to profiles table
   const uploadAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
     try {
-      setUploading(true)
-      const file = e.target.files?.[0]
-      if (!file || !user) return
+      setUploading(true);
+      const file = e.target.files?.[0];
+      if (!file || !user) return;
 
-      // ✅ Allow all image formats
-      const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif']
+      const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'];
       if (!validTypes.includes(file.type)) {
-        alert('Please upload a valid image (png, jpg, jpeg, webp, or gif).')
-        return
+        alert('Please upload a valid image (png, jpg, jpeg, webp, or gif).');
+        return;
       }
 
-      const fileExt = file.name.split('.').pop()
-      const fileName = `${user.id}-${Date.now()}.${fileExt}`
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+      const filePath = `avatars/${fileName}`;
 
-      const { data, error } = await supabase.storage
+      // Upload (use filePath with folder)
+      const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(fileName, file, { upsert: true })
+        .upload(filePath, file, { upsert: true });
 
-      if (error) throw error
+      if (uploadError) throw uploadError;
 
-      const { data: publicUrl } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(fileName)
+      // Get public URL for that path
+      const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
+      const publicUrl = publicUrlData?.publicUrl ?? '';
 
-      setAvatarUrl(publicUrl.publicUrl)
+      // Immediately persist avatar_url to profiles table so it shows everywhere
+      const { error: upsertError } = await supabase
+  .from('profiles')
+  .upsert([{ id: user.id, avatar_url: publicUrl }], { onConflict: 'id' });
+
+
+      if (upsertError) {
+        console.error('Error saving avatar URL to profile:', upsertError);
+      }
+
+      // update local state so UI reflects change immediately
+      setAvatarUrl(publicUrl);
     } catch (err: any) {
-      alert(err.message)
+      console.error('Upload avatar error:', err);
+      alert(err?.message || 'Upload failed');
     } finally {
-      setUploading(false)
+      setUploading(false);
     }
-  }
+  };
 
+  // Save profile (username, wallet, avatar_url)
   const saveProfile = async () => {
-    setSaving(true)
-    const updates = {
-      id: user.id,
-      username,
-      avatar_url: avatarUrl,
-      updated_at: new Date(),
-    }
+    if (!user) return;
+    setSaving(true);
+    try {
+      const updates = {
+        id: user.id,
+        username,
+        avatar_url: avatarUrl,
+        wallet_address: walletAddress,
+        updated_at: new Date(),
+      };
 
-    const { error } = await supabase.from('profiles').upsert(updates)
-    setSaving(false)
-    if (!error) {
-      alert('Profile updated!')
-      window.location.href = '/chat'
-    } else {
-      alert(error.message)
+     const { error } = await supabase
+  .from("profiles")
+  .upsert([updates], { onConflict: "id" });
+
+
+
+      alert('Profile updated!');
+      router.push('/home'); // redirect to /home as requested
+    } catch (err: any) {
+      console.error('Save profile error:', err);
+      alert(err?.message || 'Error saving profile');
+    } finally {
+      setSaving(false);
     }
-  }
+  };
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen bg-blue-950 text-white px-6">
-      <div className="bg-gray-900 rounded-2xl shadow-lg p-8 w-full max-w-md text-center">
-        <h2 className="text-2xl font-bold mb-4">Customize Your Profile 🎨</h2>
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white text-gray-800">
+      {/* Header + Sidebar */}
+      <ChatHeader currentUserId={user?.id} setSelectedProfile={() => {}} onSearch={() => {}} />
+      <div className="flex">
+        <aside className="hidden md:block w-64 p-6">
+          <Sidebar />
+        </aside>
 
-        {/* Avatar */}
-        <div className="mb-4">
-          {avatarUrl ? (
-            <Image
-              src={avatarUrl}
-              alt="avatar"
-              width={100}
-              height={100}
-              className="rounded-full mx-auto mb-3 border-4 border-blue-500 object-cover"
-            />
-          ) : (
-            <div className="w-24 h-24 bg-gray-700 rounded-full mx-auto mb-3 flex items-center justify-center text-gray-400">
-              No Image
+        <main className="flex-1 flex flex-col items-center justify-center py-16 px-6">
+          <div className="bg-white border border-blue-100 rounded-2xl shadow-xl p-8 w-full max-w-md text-center">
+            <h2 className="text-3xl font-bold text-blue-700 mb-2">Customize Your Profile ✨</h2>
+            <p className="text-gray-500 mb-6">Set your username, avatar, and wallet to get started.</p>
+
+            {/* Avatar Upload */}
+            <div className="mb-6">
+              {avatarUrl ? (
+                // use unoptimized so external Supabase URL shows without next.config change
+                <Image
+                  src={avatarUrl}
+                  alt="avatar"
+                  width={110}
+                  height={110}
+                  className="rounded-full mx-auto mb-3 border-4 border-blue-500 object-cover"
+                  unoptimized
+                />
+              ) : (
+                <div className="w-28 h-28 bg-gray-200 rounded-full mx-auto mb-3 flex items-center justify-center text-gray-400">
+                  No Image
+                </div>
+              )}
+
+              <label
+                htmlFor="avatar-upload"
+                className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition"
+              >
+                {uploading ? 'Uploading...' : 'Upload Avatar'}
+              </label>
+              <input
+                id="avatar-upload"
+                type="file"
+                accept="image/*"
+                onChange={uploadAvatar}
+                className="hidden"
+                disabled={uploading}
+              />
             </div>
-          )}
 
-          {/* Hidden file input */}
-          <label
-            htmlFor="avatar-upload"
-            className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition"
-          >
-            {uploading ? 'Uploading...' : 'Upload Avatar'}
-          </label>
-          <input
-            id="avatar-upload"
-            type="file"
-            accept="image/*"
-            onChange={uploadAvatar}
-            className="hidden"
-            disabled={uploading}
-          />
-        </div>
+            {/* Username */}
+            <input
+              type="text"
+              placeholder="Enter your username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full px-4 py-2 rounded-lg bg-gray-100 border border-gray-300 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
 
-        {/* Username */}
-        <input
-          type="text"
-          placeholder="Enter your username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+            {/* Wallet Address */}
+            <input
+              type="text"
+              placeholder="Your wallet address"
+              value={walletAddress}
+              onChange={(e) => setWalletAddress(e.target.value)}
+              className="w-full px-4 py-2 rounded-lg bg-gray-100 border border-gray-300 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
 
-        {/* Email (readonly) */}
-        <p className="text-gray-400 text-sm mb-4">{user?.email}</p>
+            {/* Connect Wallet */}
+            <div className="mb-6 flex justify-center">
+              <ConnectButton />
+            </div>
 
-        <button
-          onClick={saveProfile}
-          disabled={saving}
-          className="w-full bg-green-600 hover:bg-green-700 transition text-white px-4 py-2 rounded-lg"
-        >
-          {saving ? 'Saving...' : 'Save & Go to Chat'}
-        </button>
+            {/* Email */}
+            <p className="text-gray-500 text-sm mb-6">{user?.email}</p>
+
+            <button
+              onClick={saveProfile}
+              disabled={saving}
+              className="w-full bg-blue-600 hover:bg-blue-700 transition text-white px-4 py-2 rounded-lg font-semibold"
+            >
+              {saving ? 'Saving...' : 'Save & Continue'}
+            </button>
+          </div>
+        </main>
       </div>
     </div>
-  )
+  );
 }
