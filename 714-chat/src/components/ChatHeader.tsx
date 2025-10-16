@@ -81,7 +81,7 @@ export default function ChatHeader({
           {/* View Profile */}
           <button
             onClick={() =>
-              setSelectedProfile({ id: currentUserId, isCurrentUser: true })
+              setSelectedProfile(currentUserId)
             }
             className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
           >
