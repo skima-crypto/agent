@@ -1,519 +1,545 @@
-'use client'
+"use client";
 
-import { useEffect, useRef, useState } from 'react'
-import Image from 'next/image'
-import { supabase } from '@/lib/supabaseClient'
-import ProfileModal from '@/components/ProfileModal'
-import EmojiPicker, { Theme } from 'emoji-picker-react'
-import dayjs from 'dayjs'
-import relativeTime from 'dayjs/plugin/relativeTime'
-dayjs.extend(relativeTime)
+import { useEffect, useRef, useState, useCallback } from "react";
+import Image from "next/image";
+import { supabase } from "@/lib/supabaseClient";
+import ProfileModal from "@/components/ProfileModal";
+import ChatHeader from "@/components/ChatHeader";
+import ThemeToggle from "@/components/ThemeToggle";
+import ImageViewerModal from "@/components/ImageViewerModal";
+import EmojiPicker, { Theme } from "emoji-picker-react";
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
+import styles from "./chat.module.css";
+dayjs.extend(relativeTime);
 
 // --- Types ---
 type Message = {
-  id: string
-  user_id: string
-  username: string
-  avatar_url?: string
-  content: string
-  image_url?: string | null
-  audio_url?: string | null
-  parent_id?: string | null
-  created_at: string
-}
+  id: string;
+  user_id: string;
+  username: string;
+  avatar_url?: string;
+  content: string;
+  image_url?: string | null;
+  audio_url?: string | null;
+  parent_id?: string | null;
+  created_at: string;
+};
 
 type Reaction = {
-  id: string
-  message_id: string
-  user_id: string
-  emoji: string
-  created_at: string
-}
+  id: string;
+  message_id: string;
+  user_id: string;
+  emoji: string;
+  created_at: string;
+};
 
 // --- Component ---
 export default function ChatPage() {
-  const [user, setUser] = useState<any>(null)
-  const [profile, setProfile] = useState<any>(null)
-  const [messages, setMessages] = useState<Message[]>([])
-  const [reactions, setReactions] = useState<Record<string, Reaction[]>>({})
-  const [newMessage, setNewMessage] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [showEmoji, setShowEmoji] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const [imageUrl, setImageUrl] = useState<string | null>(null)
-  const [audioUrl, setAudioUrl] = useState<string | null>(null)
-  const [replyTo, setReplyTo] = useState<Message | null>(null)
-  const [gifResults, setGifResults] = useState<any[]>([])
-  const [showGifPicker, setShowGifPicker] = useState(false)
-  const [isRecording, setIsRecording] = useState(false)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const audioChunksRef = useRef<Blob[]>([])
-  const messagesRef = useRef<HTMLDivElement | null>(null)
-  const [selectedProfile, setSelectedProfile] = useState<any>(null)
+  const [user, setUser] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [filteredMessages, setFilteredMessages] = useState<Message[]>([]);
+  const [reactions, setReactions] = useState<Record<string, Reaction[]>>({});
+  const [newMessage, setNewMessage] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [showEmoji, setShowEmoji] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [gifResults, setGifResults] = useState<any[]>([]);
+  const [showGifPicker, setShowGifPicker] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const messagesRef = useRef<HTMLDivElement | null>(null);
+  const [selectedProfile, setSelectedProfile] = useState<any>(null); // holds profile object from openUserProfile
+  const [imageViewerUrl, setImageViewerUrl] = useState<string | null>(null);
 
-  
+  const timeAgo = (d: string) => dayjs(d).fromNow();
 
-  const timeAgo = (d: string) => dayjs(d).fromNow()
+  // --- openUserProfile uses existing logic (fetches profile object and sets selectedProfile) ---
+  const openUserProfile = async (userId: string) => {
+  try {
+    if (!userId) {
+      console.warn("⚠️ No userId provided to openUserProfile");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, username, avatar_url, wallet_address")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Supabase error:", error.message || error);
+      return;
+    }
+
+    if (!data) {
+      console.warn("⚠️ No profile found for userId:", userId);
+      return;
+    }
+
+    console.log("✅ Loaded profile:", data);
+    setSelectedProfile(data);
+  } catch (err: any) {
+    console.error("Unexpected error loading profile:", err.message || err);
+  }
+};
+
+const handleOpenProfile = useCallback(
+  (id: string | null) => {
+    if (id) openUserProfile(id);
+  },
+  [openUserProfile]
+);
+
 
   // --- Ensure buckets exist ---
   const ensureBucket = async (bucket: string) => {
     try {
-      await supabase.storage.createBucket(bucket, { public: true })
+      await supabase.storage.createBucket(bucket, { public: true });
     } catch {}
-  }
+  };
 
   // --- Initialize user & profile ---
   useEffect(() => {
     const init = async () => {
-      const { data } = await supabase.auth.getSession()
-      const sessionUser = data.session?.user
+      const { data } = await supabase.auth.getSession();
+      const sessionUser = data.session?.user;
       if (!sessionUser) {
-        window.location.href = '/login'
-        return
+        window.location.href = "/login";
+        return;
       }
-      setUser(sessionUser)
+      setUser(sessionUser);
 
       const { data: prof } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', sessionUser.id)
-        .single()
-      setProfile(prof || null)
+        .from("profiles")
+        .select("*")
+        .eq("id", sessionUser.id)
+        .single();
+      setProfile(prof || null);
 
-      await ensureBucket('chat-uploads')
-      await ensureBucket('avatars')
-      setLoading(false)
-    }
-    init()
-  }, [])
-
-  const openUserProfile = async (userId: string) => {
-  try {
-    if (!userId) {
-      console.warn('⚠️ No userId provided to openUserProfile')
-      return
-    }
-
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, username, avatar_url, wallet_address')
-      .eq('id', userId)
-      .maybeSingle() // ✅ instead of .single()
-
-    if (error) {
-      console.error('Supabase error:', error)
-      return
-    }
-
-    if (!data) {
-      console.warn('⚠️ No profile found for userId:', userId)
-      return
-    }
-
-    setSelectedProfile(data)
-  } catch (err: any) {
-    console.error('Error loading profile:', err.message || err)
-  }
-}
-
-const closeProfile = () => setSelectedProfile(null)
+      await ensureBucket("chat-uploads");
+      await ensureBucket("avatars");
+      setLoading(false);
+    };
+    init();
+  }, []);
 
 
-// --- Load messages & subscribe to realtime updates ---
-useEffect(() => {
-  if (!user) return
 
-  const loadAndSubscribe = async () => {
-    try {
-      // Load initial messages
-      const res = await fetch('/api/chat')
-      if (!res.ok) throw new Error('Failed to fetch messages')
-      const data = await res.json()
-      setMessages(data)
-    } catch (err) {
-      console.error('Error loading messages:', err)
-    }
+  // --- Load messages & subscribe to realtime updates ---
+  useEffect(() => {
+    if (!user) return;
 
-    // ✅ Proper realtime listener
-    const channel = supabase
-      .channel('public:messages') // Must match schema:table
-      .on(
-        'postgres_changes',
-        {
-          event: '*', // listen to INSERT, UPDATE, DELETE
-          schema: 'public',
-          table: 'messages',
-        },
-        (payload) => {
-          const newMsg = payload.new as Message
-          const oldMsg = payload.old as Message
+    const loadAndSubscribe = async () => {
+      try {
+        // Load initial messages
+        const res = await fetch("/api/chat");
+        if (!res.ok) throw new Error("Failed to fetch messages");
+        const data = await res.json();
+        setMessages(data || []);
+        setFilteredMessages(data || []);
+      } catch (err) {
+        console.error("Error loading messages:", err);
+      }
 
-          setMessages((prev) => {
-            switch (payload.eventType) {
-              case 'INSERT':
-                if (prev.some((m) => m.id === newMsg.id)) return prev
-                return [...prev, newMsg]
-              case 'UPDATE':
-                return prev.map((m) => (m.id === newMsg.id ? newMsg : m))
-              case 'DELETE':
-                return prev.filter((m) => m.id !== oldMsg.id)
-              default:
-                return prev
-            }
-          })
+      // Realtime listener
+      const channel = supabase
+        .channel("public:messages") // Must match schema:table
+        .on(
+          "postgres_changes",
+          {
+            event: "*", // listen to INSERT, UPDATE, DELETE
+            schema: "public",
+            table: "messages",
+          },
+          (payload) => {
+            const newMsg = payload.new as Message;
+            const oldMsg = payload.old as Message;
 
-          // Auto-scroll when a new message appears
-          setTimeout(() => {
-            messagesRef.current?.scrollTo({
-              top: messagesRef.current.scrollHeight,
-              behavior: 'smooth',
-            })
-          }, 100)
-        }
-      )
-      .subscribe()
+            setMessages((prev) => {
+              let updated = prev;
+              switch (payload.eventType) {
+                case "INSERT":
+                  if (prev.some((m) => m.id === newMsg.id)) return prev;
+                  updated = [...prev, newMsg];
+                  break;
+                case "UPDATE":
+                  updated = prev.map((m) => (m.id === newMsg.id ? newMsg : m));
+                  break;
+                case "DELETE":
+                  updated = prev.filter((m) => m.id !== oldMsg.id);
+                  break;
+                default:
+                  updated = prev;
+              }
+              // Also keep filteredMessages in sync (simple approach: re-filter with last search term if any)
+              setFilteredMessages((fm) => {
+                // If there's currently a search term, keep filtering, else mirror updated
+                const input = (document.querySelector<HTMLInputElement>('[data-chat-search="true"]')?.value || "").trim();
+                if (!input) return updated;
+                const lower = input.toLowerCase();
+                return updated.filter(
+                  (msg) =>
+                    (msg.username || "").toLowerCase().includes(lower) ||
+                    (msg.content || "").toLowerCase().includes(lower)
+                );
+              });
+              return updated;
+            });
 
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }
+            // Auto-scroll when a new message appears
+            setTimeout(() => {
+              messagesRef.current?.scrollTo({
+                top: messagesRef.current.scrollHeight,
+                behavior: "smooth",
+              });
+            }, 100);
+          }
+        )
+        .subscribe();
 
-  loadAndSubscribe()
-}, [user])
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    };
 
+    loadAndSubscribe();
+  }, [user]);
 
   // --- Load and subscribe to reactions ---
-useEffect(() => {
-  if (!user) return
+  useEffect(() => {
+    if (!user) return;
 
-  const loadReactions = async () => {
-    const res = await fetch('/api/reactions')
-    if (!res.ok) return
-    const data: Reaction[] = await res.json()
+    const loadReactions = async () => {
+      const res = await fetch("/api/reactions");
+      if (!res.ok) return;
+      const data: Reaction[] = await res.json();
 
-    const grouped = data.reduce((acc: Record<string, Reaction[]>, r) => {
-      acc[r.message_id] = acc[r.message_id] || []
-      acc[r.message_id].push(r)
-      return acc
-    }, {})
-    setReactions(grouped)
-  }
-  loadReactions()
+      const grouped = data.reduce((acc: Record<string, Reaction[]>, r) => {
+        acc[r.message_id] = acc[r.message_id] || [];
+        acc[r.message_id].push(r);
+        return acc;
+      }, {});
+      setReactions(grouped);
+    };
+    loadReactions();
 
-  const channel = supabase
-    .channel('chat-reactions')
-    .on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'reactions' },
-      (payload) => {
-        const newReaction = payload.new as Reaction
-        setReactions((prev) => {
-          const current = prev[newReaction.message_id] || []
-          return {
-            ...prev,
-            [newReaction.message_id]: [...current, newReaction],
-          }
-        })
-      }
-    )
-    .subscribe()
+    const channel = supabase
+      .channel("chat-reactions")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "reactions" },
+        (payload) => {
+          const newReaction = payload.new as Reaction;
+          setReactions((prev) => {
+            const current = prev[newReaction.message_id] || [];
+            return {
+              ...prev,
+              [newReaction.message_id]: [...current, newReaction],
+            };
+          });
+        }
+      )
+      .subscribe();
 
-  return () => {
-    supabase.removeChannel(channel)
-  }
-}, [user])
-
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
 
   // --- Send Message ---
   const sendMessage = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault()
-    if (!user) return
-    if (!newMessage.trim() && !imageUrl && !audioUrl) return
+    if (e) e.preventDefault();
+    if (!user) return;
+    if (!newMessage.trim() && !imageUrl && !audioUrl) return;
 
     const content = replyTo
       ? `↩️ ${replyTo.username}: ${replyTo.content}\n${newMessage}`
-      : newMessage
+      : newMessage;
 
     try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_id: user.id,
           username:
             profile?.username ||
             user.user_metadata?.full_name ||
-            user.email.split('@')[0],
-          avatar_url:
-            profile?.avatar_url || user.user_metadata?.avatar_url || '',
+            user.email.split("@")[0],
+          avatar_url: profile?.avatar_url || user.user_metadata?.avatar_url || "",
           content,
           image_url: imageUrl || null,
           audio_url: audioUrl || null,
           parent_id: replyTo?.id || null,
         }),
-      })
+      });
 
       if (!res.ok) {
-        const err = await res.json()
-        console.error('Send message error:', err)
-        return
+        const err = await res.json();
+        console.error("Send message error:", err);
+        return;
       }
 
-      const newMsg = await res.json()
-      setMessages((prev) => [...prev, newMsg])
-      setNewMessage('')
-      setImageUrl(null)
-      setAudioUrl(null)
-      setReplyTo(null)
-      setShowEmoji(false)
+      const newMsg = await res.json();
+      setMessages((prev) => [...prev, newMsg]);
+      setFilteredMessages((prev) => [...prev, newMsg]);
+      setNewMessage("");
+      setImageUrl(null);
+      setAudioUrl(null);
+      setReplyTo(null);
+      setShowEmoji(false);
     } catch (err) {
-      console.error('Send message failed:', err)
+      console.error("Send message failed:", err);
     }
-  }
+  };
 
   // --- Image Upload ---
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file || !user) return
-    setUploading(true)
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setUploading(true);
 
     try {
-      const bucket = 'chat-uploads'
-      await ensureBucket(bucket)
-      const fileName = `${user.id}-${Date.now()}-${file.name}`
-      const { error } = await supabase.storage
-        .from(bucket)
-        .upload(fileName, file, { upsert: true })
-      if (error) throw error
-      const { data } = supabase.storage.from(bucket).getPublicUrl(fileName)
-      setImageUrl(data.publicUrl)
+      const bucket = "chat-uploads";
+      await ensureBucket(bucket);
+      const fileName = `${user.id}-${Date.now()}-${file.name}`;
+      const { error } = await supabase.storage.from(bucket).upload(fileName, file, { upsert: true });
+      if (error) throw error;
+      const { data } = supabase.storage.from(bucket).getPublicUrl(fileName);
+      setImageUrl(data.publicUrl);
     } catch (err: any) {
-      alert('Upload failed: ' + (err?.message || err))
+      alert("Upload failed: " + (err?.message || err));
     } finally {
-      setUploading(false)
+      setUploading(false);
     }
-  }
+  };
 
   // --- Voice Recording ---
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      if (!stream) return alert('Microphone not found')
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!stream) return alert("Microphone not found");
 
-      const mr = new MediaRecorder(stream)
-      mediaRecorderRef.current = mr
-      audioChunksRef.current = []
+      const mr = new MediaRecorder(stream);
+      mediaRecorderRef.current = mr;
+      audioChunksRef.current = [];
 
       mr.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data)
-      }
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
 
       mr.onstop = async () => {
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
-        const fileName = `${user.id}-voice-${Date.now()}.webm`
-        const bucket = 'chat-uploads'
+        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const fileName = `${user.id}-voice-${Date.now()}.webm`;
+        const bucket = "chat-uploads";
 
         try {
-          await ensureBucket(bucket)
-          const { error } = await supabase.storage
-            .from(bucket)
-            .upload(fileName, blob, { upsert: true })
-          if (error) throw error
-          const { data } = supabase.storage.from(bucket).getPublicUrl(fileName)
-          setAudioUrl(data.publicUrl)
-          await sendMessage()
+          await ensureBucket(bucket);
+          const { error } = await supabase.storage.from(bucket).upload(fileName, blob, { upsert: true });
+          if (error) throw error;
+          const { data } = supabase.storage.from(bucket).getPublicUrl(fileName);
+          setAudioUrl(data.publicUrl);
+          await sendMessage();
         } catch (err: any) {
-          alert('Voice upload failed: ' + (err.message || err))
+          alert("Voice upload failed: " + (err.message || err));
         }
-      }
+      };
 
-      mr.start()
-      setIsRecording(true)
+      mr.start();
+      setIsRecording(true);
     } catch (err: any) {
-      console.error(err)
-      alert('Microphone access failed.')
+      console.error(err);
+      alert("Microphone access failed.");
     }
-  }
+  };
 
   const stopRecording = () => {
-    const mr = mediaRecorderRef.current
-    if (!mr) return
-    mr.stop()
-    setIsRecording(false)
-  }
+    const mr = mediaRecorderRef.current;
+    if (!mr) return;
+    mr.stop();
+    setIsRecording(false);
+  };
 
   // --- Play Audio ---
   const playAudio = (url: string) => {
-    const audio = new Audio(url)
-    audio.play().catch((e) => console.error(e))
-  }
+    const audio = new Audio(url);
+    audio.play().catch((e) => console.error(e));
+  };
 
   // --- Scroll to bottom on new messages ---
   useEffect(() => {
     setTimeout(() => {
       messagesRef.current?.scrollTo({
         top: messagesRef.current.scrollHeight,
-        behavior: 'smooth',
-      })
-    }, 150)
-  }, [messages.length])
+        behavior: "smooth",
+      });
+    }, 150);
+  }, [messages.length]);
 
   if (loading)
     return (
       <div className="flex h-screen items-center justify-center text-white bg-black">
         Loading chat...
       </div>
-    )
+    );
 
+  const handleAddReaction = async (messageId: string) => {
+    const emoji = prompt("React with emoji (e.g. 😍, 😂, 👍):");
+    if (!emoji) return;
 
-    const handleAddReaction = async (messageId: string) => {
-  const emoji = prompt('React with emoji (e.g. 😍, 😂, 👍):')
-  if (!emoji) return
+    const res = await fetch("/api/reactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message_id: messageId, user_id: user.id, emoji }),
+    });
 
-  const res = await fetch('/api/reactions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message_id: messageId, user_id: user.id, emoji }),
-  })
+    if (!res.ok) {
+      const err = await res.json();
+      console.error("Failed to add reaction:", err);
+    }
+  };
 
-  if (!res.ok) {
-    const err = await res.json()
-    console.error('Failed to add reaction:', err)
-  }
-}
-
+  // --- Search handler for ChatHeader ---
+  const handleSearch = (term: string) => {
+    const t = term.trim();
+    if (!t) {
+      setFilteredMessages(messages);
+      return;
+    }
+    const lower = t.toLowerCase();
+    const filtered = messages.filter(
+      (m) =>
+        (m.username || "").toLowerCase().includes(lower) ||
+        (m.content || "").toLowerCase().includes(lower)
+    );
+    setFilteredMessages(filtered);
+  };
 
   return (
-    <div className="flex flex-col h-screen bg-black text-white">
-      <div className="absolute inset-0 -z-10">
-        <Image src="/714BG.jpg" alt="bg" fill className="object-cover opacity-10" />
-      </div>
-
-      <header
-  onClick={() => openUserProfile(user.id)}
-  className="relative z-10 bg-[#1a1a1a] border-b border-zinc-800 py-3 text-center font-semibold text-lg shadow-md cursor-pointer hover:text-blue-400 transition"
->
-  💬 714 Global Chat (click to view your profile)
-</header>
-
-
-      {/* --- Messages List --- */}
-<div
-  ref={messagesRef}
-  className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-zinc-700 relative"
->
-  {messages.map((msg) => {
-  const mine = msg.user_id === user.id
-  return (
-    <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-      <div className={`flex max-w-[75%] items-end gap-2 ${mine ? 'flex-row-reverse text-right' : ''}`}>
-        {/* Avatar - now shown for both mine and others and clickable */}
-        <img
-          src={msg.avatar_url || '/default-avatar.png'}
-          alt={`${msg.username || 'User'} avatar`}
-          role="button"
-          onClick={() => openUserProfile(msg.user_id)}
-          className="w-8 h-8 rounded-full shadow-md object-cover cursor-pointer"
-        />
-
-        <div
-          className={`p-3 rounded-2xl shadow-md ${
-            mine ? 'bg-blue-600 rounded-br-none' : 'bg-zinc-800 rounded-bl-none'
-          }`}
-        >
-          {!mine && (
-  <p
-    className="text-xs text-gray-400 font-semibold mb-1 cursor-pointer hover:text-blue-400"
-    onClick={() => openUserProfile(msg.user_id)}
-  >
-    {msg.username}
-  </p>
-)}
-
-
-          {msg.image_url && (
-            <Image
-              src={msg.image_url}
-              alt="upload"
-              width={360}
-              height={240}
-              className="rounded-lg mb-2 object-cover"
-            />
-          )}
-
-          {msg.audio_url && (
-            <div className="mb-2 flex items-center gap-2">
-              <button
-                onClick={() => playAudio(msg.audio_url!)}
-                className="px-2 py-1 bg-zinc-900 rounded-md"
-              >
-                ▶️ Play
-              </button>
-              <span className="text-xs text-gray-400">Voice note</span>
-            </div>
-          )}
-
-          {msg.content && (
-            <p className="text-sm leading-snug whitespace-pre-wrap">
-              {msg.content}
-            </p>
-          )}
-
-          {/* --- Reactions Section --- */}
-          <div className="mt-2 flex flex-wrap gap-2 items-center">
-            {(reactions[msg.id] || []).map((r) => (
-              <span key={r.id} className="text-lg">
-                {r.emoji}
-              </span>
-            ))}
-            <button
-              onClick={() => handleAddReaction(msg.id)}
-              className="text-gray-400 hover:text-yellow-400 text-sm"
-            >
-              ➕
-            </button>
-          </div>
-
-          <div className="mt-1 text-[11px] text-gray-400">
-            {timeAgo(msg.created_at)}
+    <div className={`${styles.chatContainer} min-h-screen flex flex-col`}>
+      {/* Background image area (only chat space uses module css background) */}
+      <div className="z-10">
+        {/* header + theme toggle */}
+        <div className="flex items-center justify-between">
+          <ChatHeader
+            setSelectedProfile={(id: string | null) => {
+              // when header's profile button is clicked, open profile using openUserProfile so selectedProfile has object
+              if (id) openUserProfile(id);
+            }}
+            currentUserId={user?.id}
+            onSearch={handleSearch}
+          />
+          <div className="pr-3">
+            <ThemeToggle />
           </div>
         </div>
       </div>
-    </div>
-  )
-})}
-</div>
 
-       
+      {/* Messages list (chatSpace uses background image placeholder inside chat.module.css) */}
+      <div ref={messagesRef} className={`${styles.chatSpace} flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-zinc-700 relative`}>
+        {filteredMessages.map((msg) => {
+          const mine = msg.user_id === user?.id;
+          return (
+            <div key={msg.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+              <div className={`flex max-w-[75%] items-end gap-2 ${mine ? "flex-row-reverse text-right" : ""}`}>
+                {/* Avatar - shown for both mine and others and clickable */}
+                <img
+                  src={msg.avatar_url || "/default-avatar.png"}
+                  alt={`${msg.username || "User"} avatar`}
+                  role="button"
+                  onClick={() => openUserProfile(msg.user_id)}
+                  className="w-8 h-8 rounded-full shadow-md object-cover cursor-pointer"
+                />
 
-      {/* --- Reply preview --- */}
+                <div
+                  className={`p-3 rounded-2xl shadow-md ${mine ? "bg-blue-600 rounded-br-none" : "bg-zinc-800 rounded-bl-none"}`}
+                >
+                  {!mine && (
+                    <p
+                      className="text-xs text-gray-400 font-semibold mb-1 cursor-pointer hover:text-blue-400"
+                      onClick={() => openUserProfile(msg.user_id)}
+                    >
+                      {msg.username}
+                    </p>
+                  )}
+
+                  {/* Image (click to open viewer) */}
+                  {msg.image_url && (
+                    // Use a simple clickable image that opens the viewer
+                    <div className="mb-2">
+                      <Image
+                        src={msg.image_url}
+                        alt="upload"
+                        width={360}
+                        height={240}
+                        className="rounded-lg mb-2 object-cover cursor-pointer"
+                        onClick={() => setImageViewerUrl(msg.image_url || null)}
+                      />
+                    </div>
+                  )}
+
+                  {/* Audio */}
+                  {msg.audio_url && (
+                    <div className="mb-2 flex items-center gap-2">
+                      <button onClick={() => playAudio(msg.audio_url!)} className="px-2 py-1 bg-zinc-900 rounded-md">
+                        ▶️ Play
+                      </button>
+                      <span className="text-xs text-gray-400">Voice note</span>
+                    </div>
+                  )}
+
+                  {/* Text */}
+                  {msg.content && (
+                    <p className="text-sm leading-snug whitespace-pre-wrap">
+                      {msg.content}
+                    </p>
+                  )}
+
+                  {/* --- Reactions Section --- */}
+                  <div className="mt-2 flex flex-wrap gap-2 items-center">
+                    {(reactions[msg.id] || []).map((r) => (
+                      <span key={r.id} className="text-lg">
+                        {r.emoji}
+                      </span>
+                    ))}
+                    <button onClick={() => handleAddReaction(msg.id)} className="text-gray-400 hover:text-yellow-400 text-sm">
+                      ➕
+                    </button>
+                  </div>
+
+                  <div className="mt-1 text-[11px] text-gray-400">
+                    {timeAgo(msg.created_at)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Reply preview */}
       {replyTo && (
         <div className="bg-zinc-900 p-2 text-sm text-gray-300 border-t border-zinc-800">
-          Replying to <strong>{replyTo.username}</strong> —{' '}
+          Replying to <strong>{replyTo.username}</strong> —{" "}
           <span className="italic">{replyTo.content.slice(0, 120)}</span>
-          <button
-            className="ml-2 text-red-400 hover:text-red-300"
-            onClick={() => setReplyTo(null)}
-          >
+          <button className="ml-2 text-red-400 hover:text-red-300" onClick={() => setReplyTo(null)}>
             ✖ Cancel
           </button>
         </div>
       )}
 
-           {/* --- Input area --- */}
-      <form
-        onSubmit={(e) => sendMessage(e)}
-        className="p-4 bg-zinc-950 border-t border-zinc-800 flex flex-col gap-3 z-10"
-      >
+      {/* Input area */}
+      <form onSubmit={(e) => sendMessage(e)} className={`${styles.inputArea} p-4 bg-zinc-950 border-t border-zinc-800 flex flex-col gap-3 z-10`}>
         {imageUrl && (
           <div className="relative w-fit">
-            <Image
-              src={imageUrl}
-              alt="preview"
-              width={140}
-              height={140}
-              className="rounded-lg mb-2 object-cover"
-            />
+            <Image src={imageUrl} alt="preview" width={140} height={140} className="rounded-lg mb-2 object-cover cursor-pointer" onClick={() => setImageViewerUrl(imageUrl)} />
             <button
               type="button"
               onClick={() => setImageUrl(null)}
@@ -525,38 +551,21 @@ useEffect(() => {
         )}
 
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setShowEmoji((v) => !v)}
-            className="text-2xl"
-          >
+          <button type="button" onClick={() => setShowEmoji((v) => !v)} className="text-2xl">
             😊
           </button>
 
           <label className="cursor-pointer px-2 py-1 bg-zinc-900 rounded">
             Upload
-            <input
-              type="file"
-              accept="image/*,video/*"
-              onChange={handleImageUpload}
-              className="hidden"
-            />
+            <input type="file" accept="image/*,video/*" onChange={handleImageUpload} className="hidden" />
           </label>
 
           {!isRecording ? (
-            <button
-              type="button"
-              onClick={startRecording}
-              className="px-3 py-2 bg-red-600 rounded text-white"
-            >
+            <button type="button" onClick={startRecording} className="px-3 py-2 bg-red-600 rounded text-white">
               ◉
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={stopRecording}
-              className="px-3 py-2 bg-red-400 rounded text-white"
-            >
+            <button type="button" onClick={stopRecording} className="px-3 py-2 bg-red-400 rounded text-white">
               ■
             </button>
           )}
@@ -569,10 +578,7 @@ useEffect(() => {
             className="flex-1 bg-zinc-900 border border-zinc-800 text-white rounded-xl px-4 py-2"
           />
 
-          <button
-            type="submit"
-            className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-xl font-semibold"
-          >
+          <button type="submit" className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-xl font-semibold">
             Send
           </button>
         </div>
@@ -580,21 +586,20 @@ useEffect(() => {
         {showEmoji && (
           <div className="mt-2">
             <EmojiPicker
-              onEmojiClick={(emojiData) =>
-                setNewMessage((prev) => prev + emojiData.emoji)
-              }
+              onEmojiClick={(emojiData) => setNewMessage((prev) => prev + emojiData.emoji)}
               theme={Theme.DARK}
             />
           </div>
         )}
       </form>
-{selectedProfile && (
-  <ProfileModal
-    userId={selectedProfile.id}
-    onClose={() => setSelectedProfile(null)}
-  />
-)}
 
-</div>
-)
+      {/* Profile modal (selectedProfile is the profile object set by openUserProfile) */}
+      {selectedProfile && (
+        <ProfileModal userId={selectedProfile.id} onClose={() => setSelectedProfile(null)} />
+      )}
+
+      {/* Image viewer overlay */}
+      {imageViewerUrl && <ImageViewerModal imageUrl={imageViewerUrl} onClose={() => setImageViewerUrl(null)} />}
+    </div>
+  );
 }
