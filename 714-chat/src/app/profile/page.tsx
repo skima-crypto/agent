@@ -59,82 +59,91 @@ export default function ProfilePage() {
     loadUser();
   }, [router]);
 
-  // Upload avatar to storage, save public URL and persist to profiles table
-  const uploadAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    try {
-      setUploading(true);
-      const file = e.target.files?.[0];
-      if (!file || !user) return;
+  // Upload avatar and immediately save it to the user's profile
+const uploadAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  try {
+    setUploading(true);
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
 
-      const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'];
-      if (!validTypes.includes(file.type)) {
-        alert('Please upload a valid image (png, jpg, jpeg, webp, or gif).');
-        return;
-      }
-
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-      const filePath = `avatars/${fileName}`;
-
-      // Upload (use filePath with folder)
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, file, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL for that path
-      const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
-      const publicUrl = publicUrlData?.publicUrl ?? '';
-
-      // Immediately persist avatar_url to profiles table so it shows everywhere
-      const { error: upsertError } = await supabase
-  .from('profiles')
-  .upsert([{ id: user.id, avatar_url: publicUrl }], { onConflict: 'id' });
-
-
-      if (upsertError) {
-        console.error('Error saving avatar URL to profile:', upsertError);
-      }
-
-      // update local state so UI reflects change immediately
-      setAvatarUrl(publicUrl);
-    } catch (err: any) {
-      console.error('Upload avatar error:', err);
-      alert(err?.message || 'Upload failed');
-    } finally {
-      setUploading(false);
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'];
+    if (!validTypes.includes(file.type)) {
+      alert('Please upload a valid image (png, jpg, jpeg, webp, or gif).');
+      return;
     }
-  };
 
-  // Save profile (username, wallet, avatar_url)
-  const saveProfile = async () => {
-    if (!user) return;
-    setSaving(true);
-    try {
-      const updates = {
-        id: user.id,
-        username,
-        avatar_url: avatarUrl,
-        wallet_address: walletAddress,
-        updated_at: new Date(),
-      };
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+    const filePath = `avatars/${fileName}`;
 
-     const { error } = await supabase
-  .from("profiles")
-  .upsert([updates], { onConflict: "id" });
+    // Upload file
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(filePath, file, { upsert: true });
 
+    if (uploadError) throw uploadError;
 
+    // Get public URL
+    const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
+    const publicUrl = urlData?.publicUrl ?? '';
 
-      alert('Profile updated!');
-      router.push('/home'); // redirect to /home as requested
-    } catch (err: any) {
-      console.error('Save profile error:', err);
-      alert(err?.message || 'Error saving profile');
-    } finally {
-      setSaving(false);
+    // Save the new avatar to the user's profile right away
+    const { error: upsertError } = await supabase
+      .from('profiles')
+      .upsert({ id: user.id, avatar_url: publicUrl }, { onConflict: 'id' });
+
+    if (upsertError) throw upsertError;
+
+    // Update UI immediately
+    setAvatarUrl(publicUrl);
+    alert('Avatar updated successfully!');
+  } catch (err: any) {
+    console.error('Upload avatar error:', err);
+    alert(err?.message || 'Upload failed');
+  } finally {
+    setUploading(false);
+  }
+};
+
+// Save profile without redirecting immediately
+const saveProfile = async () => {
+  if (!user) return;
+  setSaving(true);
+  try {
+    const updates = {
+      id: user.id,
+      username,
+      avatar_url: avatarUrl,
+      wallet_address: walletAddress,
+      updated_at: new Date(),
+    };
+
+    const { error } = await supabase.from('profiles').upsert([updates], { onConflict: 'id' });
+    if (error) throw error;
+
+    // Refresh profile data to confirm changes before redirect
+    const { data: refreshedProfile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (refreshedProfile) {
+      setUsername(refreshedProfile.username || '');
+      setAvatarUrl(refreshedProfile.avatar_url || '');
+      setWalletAddress(refreshedProfile.wallet_address || '');
     }
-  };
+
+    alert('Profile updated!');
+    router.push('/home'); // move after successful confirmation
+  } catch (err: any) {
+    console.error('Save profile error:', err);
+    alert(err?.message || 'Error saving profile');
+  } finally {
+    setSaving(false);
+  }
+};
+
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white text-gray-800">

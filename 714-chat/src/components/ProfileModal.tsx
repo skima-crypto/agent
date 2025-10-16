@@ -62,26 +62,34 @@ const { switchChain } = useSwitchChain()
   const isOwner = currentUserId === userId
 
   // --- Load profile info ---
-  useEffect(() => {
-    if (!userId) return
-    const loadProfile = async () => {
-      setLoading(true)
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, username, avatar_url, wallet_address')
-        .eq('id', userId)
-        .maybeSingle()
+useEffect(() => {
+  if (!userId) return;
 
-      if (!error && data) {
-        setUsername(data.username || '')
-        setWalletAddress(data.wallet_address || '')
-        setAvatarUrl(data.avatar_url || null)
-      } else console.error(error)
-      setLoading(false)
+  const loadProfile = async () => {
+    setLoading(true);
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, username, avatar_url, wallet_address')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error loading profile:', error);
+    } else if (data) {
+      setUsername(data.username || '');
+      setWalletAddress(data.wallet_address || '');
+      setAvatarUrl(data.avatar_url || null);
+    } else {
+      console.warn(`No profile found for user ${userId}`);
     }
 
-    loadProfile()
-  }, [userId])
+    setLoading(false);
+  };
+
+  loadProfile();
+}, [userId]);
+
 
   // --- Upload Avatar ---
   const uploadAvatar = async (event: React.ChangeEvent<HTMLInputElement>) => {
