@@ -7,6 +7,8 @@ import ThemeToggle from "@/components/ThemeToggle";
 import { supabase } from "@/lib/supabaseClient";
 import { motion } from "framer-motion";
 import { Toaster, toast } from "react-hot-toast";
+import { Github, Twitter } from "lucide-react";
+import Image from "next/image";
 
 export default function HomePage() {
   const router = useRouter();
@@ -16,9 +18,8 @@ export default function HomePage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
-  const [message, setMessage] = useState("");
 
-  // Fetch session & profile
+  // SESSION + PROFILE
   useEffect(() => {
     const init = async () => {
       setLoading(true);
@@ -75,12 +76,11 @@ export default function HomePage() {
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setMessage("Loading...");
     try {
       if (isSignUp) {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) return toast.error(error.message);
-        toast.success("Account created! Check your email to confirm.");
+        toast.success("Account created! Check your email.");
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
@@ -118,181 +118,201 @@ export default function HomePage() {
   }
 
   return (
-    <div className="relative flex min-h-screen bg-gradient-to-br from-blue-900 via-indigo-900 to-black text-gray-100 font-inter overflow-hidden">
+    <div className="relative flex min-h-screen bg-gradient-to-br from-[#020617] via-[#0f172a] to-[#1e293b] dark:from-gray-50 dark:via-white dark:to-gray-200 text-gray-100 dark:text-gray-900 font-inter overflow-hidden transition-all duration-700">
       <Toaster position="top-right" />
       <Sidebar />
 
-      {/* Glowing animated background */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(0,100,255,0.25),transparent_60%),radial-gradient(circle_at_80%_70%,rgba(100,0,255,0.25),transparent_60%)] blur-3xl pointer-events-none" />
-
-      <main className="flex-1 lg:ml-64 p-6 relative z-10">
-        {/* Header */}
+      {/* Floating gradients background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <motion.div
-          initial={{ opacity: 0, y: -20 }}
+          className="absolute w-72 h-72 bg-blue-500/25 dark:bg-blue-400/10 rounded-full blur-3xl top-20 left-10"
+          animate={{ y: [0, 40, 0] }}
+          transition={{ duration: 6, repeat: Infinity }}
+        />
+        <motion.div
+          className="absolute w-96 h-96 bg-purple-600/20 dark:bg-purple-400/10 rounded-full blur-3xl bottom-0 right-0"
+          animate={{ y: [0, -30, 0] }}
+          transition={{ duration: 8, repeat: Infinity }}
+        />
+      </div>
+
+      <main className="flex-1 lg:ml-64 p-6 relative z-10 flex flex-col items-center">
+        {/* HEADER */}
+        <motion.div
+          initial={{ opacity: 0, y: -25 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="flex items-center justify-between mb-10"
+          className="flex flex-col items-center gap-2 mb-10 text-center"
         >
-          <div>
-            <h1 className="text-5xl font-extrabold bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent drop-shadow-md">
-              714 Chat
-            </h1>
-            <p className="text-sm text-blue-200 mt-2">
-              Global chat, tipping, and community experiments on Base.
+          <Image
+            src="https://i.postimg.cc/CM3TC7Lm/714.jpg"
+            alt="714 Chat Logo"
+            width={90}
+            height={90}
+            className="rounded-2xl shadow-xl"
+          />
+          <motion.h1
+            animate={{ scale: [1, 1.05, 1] }}
+            transition={{ duration: 2, repeat: Infinity }}
+            className="text-5xl font-extrabold bg-gradient-to-r from-blue-400 via-cyan-400 to-purple-400 bg-clip-text text-transparent"
+          >
+            714 Chat
+          </motion.h1>
+          <p className="text-sm text-blue-200 dark:text-blue-700">
+            Chat globally, tip on-chain, and explore decentralized social
+            connections.
+          </p>
+          <ThemeToggle />
+        </motion.div>
+
+        {/* CENTERED BOX */}
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7 }}
+          className="max-w-3xl w-full bg-white/10 dark:bg-white/60 backdrop-blur-xl border border-white/20 dark:border-gray-200 rounded-3xl p-8 shadow-2xl flex flex-col items-center space-y-6"
+        >
+          <motion.div
+            animate={{ opacity: [0.8, 1, 0.8] }}
+            transition={{ duration: 3, repeat: Infinity }}
+            className="text-center"
+          >
+            <h2 className="text-2xl font-bold text-blue-200 dark:text-blue-600 mb-2">
+              Get Started
+            </h2>
+            <p className="text-gray-300 dark:text-gray-700 mb-4">
+              Sign in and explore on-chain chat, tipping, and social fun.
             </p>
-          </div>
-          <div className="flex items-center gap-3">
-            {sessionUser && (
-              <div className="flex items-center gap-3 bg-white/10 px-4 py-2 rounded-2xl backdrop-blur-md border border-white/20">
-                <span className="text-sm text-gray-200">
-                  Signed in as{" "}
-                  <strong className="text-blue-300">
-                    {sessionUser.email?.split?.("@")?.[0] ?? "user"}
-                  </strong>
-                </span>
+          </motion.div>
+
+          <div className="flex flex-col items-center space-y-5 w-full">
+            {!sessionUser ? (
+              <>
                 <button
-                  onClick={handleLogout}
-                  className="px-4 py-2 bg-red-500/80 text-white rounded-xl hover:bg-red-600 transition font-medium"
+                  onClick={handleGoogleLogin}
+                  className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-semibold rounded-xl shadow-lg hover:opacity-90 transition"
                 >
-                  Logout
+                  Sign in with Google
+                </button>
+
+                <form onSubmit={handleAuthSubmit} className="w-full space-y-4">
+                  <input
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Email"
+                    type="email"
+                    className="w-full px-4 py-3 bg-black/30 dark:bg-gray-200 border border-white/20 dark:border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-400"
+                    required
+                  />
+                  <input
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Password"
+                    type="password"
+                    className="w-full px-4 py-3 bg-black/30 dark:bg-gray-200 border border-white/20 dark:border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-400"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    className="w-full px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-400 text-white font-medium rounded-xl hover:opacity-90 transition"
+                  >
+                    {isSignUp ? "Create Account" : "Sign In"}
+                  </button>
+                </form>
+                <button
+                  onClick={() => setIsSignUp(!isSignUp)}
+                  className="text-sm text-blue-300 dark:text-blue-700 hover:underline"
+                >
+                  Toggle to {isSignUp ? "Sign In" : "Sign Up"}
+                </button>
+              </>
+            ) : (
+              <div className="flex flex-col sm:flex-row gap-3 w-full">
+                <button
+                  onClick={() => router.push("/chat")}
+                  className="flex-1 px-5 py-3 bg-gradient-to-r from-blue-600 to-indigo-500 text-white rounded-xl shadow hover:opacity-90"
+                >
+                  Enter Chat
+                </button>
+                <button
+                  onClick={() => router.push("/profile")}
+                  className="flex-1 px-5 py-3 bg-white/10 dark:bg-gray-100 text-indigo-200 dark:text-indigo-700 border border-white/20 dark:border-gray-400 rounded-xl hover:bg-white/20 dark:hover:bg-gray-200"
+                >
+                  Open Profile
                 </button>
               </div>
             )}
-            <ThemeToggle />
+
+            {/* Reach Us */}
+            <div className="flex flex-col items-center mt-8 text-center">
+              <p className="text-gray-400 dark:text-gray-700 text-sm mb-2">
+                Reach us / Connect with:
+              </p>
+              <div className="flex gap-6">
+                <a
+                  href="https://twitter.com/"
+                  target="_blank"
+                  className="text-blue-400 dark:text-blue-700 hover:scale-110 transition"
+                >
+                  <Twitter size={28} />
+                </a>
+                <a
+                  href="https://github.com/"
+                  target="_blank"
+                  className="text-gray-400 dark:text-gray-800 hover:scale-110 transition"
+                >
+                  <Github size={28} />
+                </a>
+              </div>
+            </div>
           </div>
+        </motion.section>
+
+        {/* AI AGENT BOX */}
+        <motion.div
+          initial={{ opacity: 0, y: 40 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+          className="max-w-3xl mt-12 w-full bg-gradient-to-br from-purple-600/20 to-blue-500/10 dark:from-purple-100/60 dark:to-blue-100/40 border border-white/20 dark:border-gray-300 backdrop-blur-xl rounded-3xl p-8 shadow-lg relative overflow-hidden"
+        >
+          {/* Robotic floating orbs */}
+          <motion.div
+            className="absolute top-5 right-10 w-14 h-14 bg-purple-400/40 dark:bg-purple-500/20 rounded-full blur-2xl"
+            animate={{ x: [0, -20, 0], y: [0, 15, 0] }}
+            transition={{ duration: 6, repeat: Infinity }}
+          />
+          <motion.div
+            className="absolute bottom-5 left-10 w-20 h-20 bg-blue-400/40 dark:bg-blue-500/20 rounded-full blur-2xl"
+            animate={{ x: [0, 15, 0], y: [0, -20, 0] }}
+            transition={{ duration: 7, repeat: Infinity }}
+          />
+
+          <h3 className="text-xl font-semibold text-purple-300 dark:text-purple-700 mb-3">
+            🤖 AI Agent — Coming Soon!
+          </h3>
+          <motion.p
+            animate={{ opacity: [0.9, 1, 0.9] }}
+            transition={{ duration: 3, repeat: Infinity }}
+            className="text-gray-300 dark:text-gray-700 leading-relaxed"
+          >
+            A self-learning robotic assistant designed to moderate chats,
+            summarize discussions, and generate new on-chain experiences.
+            Imagine an AI that interacts natively with Base to help your
+            community grow, discover trends, and automate engagement.
+          </motion.p>
+
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            className="mt-5 px-5 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white dark:text-white rounded-xl shadow hover:opacity-90 transition"
+          >
+            Stay Tuned
+          </motion.button>
         </motion.div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-          {/* Left Section */}
-          <section className="space-y-8">
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
-              className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-8 shadow-2xl"
-            >
-              <h2 className="text-2xl font-bold text-blue-200 mb-2">
-                Welcome to{" "}
-                <span className="bg-gradient-to-r from-blue-400 to-indigo-300 bg-clip-text text-transparent">
-                  714 Chat
-                </span>
-              </h2>
-              <p className="text-gray-300 mb-6">
-                Chat globally, tip on-chain, and explore decentralized social
-                primitives — all in one experimental space.
-              </p>
-
-              {!sessionUser ? (
-                <>
-                  <div className="flex flex-col sm:flex-row gap-3 mb-5">
-                    <button
-                      onClick={handleGoogleLogin}
-                      className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-semibold rounded-xl shadow-lg hover:opacity-90 transition"
-                    >
-                      Sign in with Google
-                    </button>
-                    <button
-                      onClick={() => setIsSignUp((s) => !s)}
-                      className="px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-gray-200 hover:bg-white/20 transition"
-                    >
-                      Toggle Sign {isSignUp ? "In" : "Up"}
-                    </button>
-                  </div>
-
-                  <form onSubmit={handleAuthSubmit} className="space-y-4">
-                    <input
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Email"
-                      type="email"
-                      required
-                      className="w-full px-4 py-3 bg-black/30 border border-white/20 rounded-xl text-gray-100 focus:ring-2 focus:ring-blue-400 placeholder-gray-400"
-                    />
-                    <input
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Password"
-                      type="password"
-                      required
-                      className="w-full px-4 py-3 bg-black/30 border border-white/20 rounded-xl text-gray-100 focus:ring-2 focus:ring-blue-400 placeholder-gray-400"
-                    />
-                    <button
-                      type="submit"
-                      className="w-full px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-400 text-white font-medium rounded-xl hover:opacity-90 transition"
-                    >
-                      {isSignUp ? "Create account" : "Sign in"}
-                    </button>
-                  </form>
-                </>
-              ) : (
-                <div className="flex flex-wrap gap-4">
-                  <button
-                    onClick={() => router.push("/chat")}
-                    className="flex-1 px-5 py-3 bg-gradient-to-r from-blue-600 to-indigo-500 text-white rounded-xl shadow hover:opacity-90 transition"
-                  >
-                    Enter Chat
-                  </button>
-                  <button
-                    onClick={() => router.push("/profile")}
-                    className="flex-1 px-5 py-3 bg-white/10 text-indigo-200 border border-white/20 rounded-xl hover:bg-white/20 transition"
-                  >
-                    Open Profile
-                  </button>
-                </div>
-              )}
-            </motion.div>
-
-            <motion.div
-              className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-8 shadow-2xl"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.2 }}
-            >
-              <h3 className="text-xl font-semibold text-blue-200 mb-4">
-                What You Can Do
-              </h3>
-              <ul className="space-y-2 text-gray-300 leading-relaxed">
-                <li>• Join the global chat and connect with others.</li>
-                <li>• Tip users with Base network tokens.</li>
-                <li>• Upload images, audio, and media in chat.</li>
-                <li>• Manage your wallet and profile easily.</li>
-              </ul>
-            </motion.div>
-          </section>
-
-          {/* Right Section */}
-          <aside className="space-y-8">
-            <motion.div
-              className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-8 shadow-2xl"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.3 }}
-            >
-              <h3 className="text-xl font-semibold text-blue-200 mb-3">
-                Community
-              </h3>
-              <p className="text-gray-300 mb-4">
-                Join a creative on-chain community exploring decentralized
-                social tipping and chat.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => router.push("/chat")}
-                  className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-lg hover:opacity-90 transition"
-                >
-                  Join Chat
-                </button>
-                <button className="px-4 py-2 bg-white/10 border border-white/20 text-gray-200 rounded-lg hover:bg-white/20 transition">
-                  Learn More
-                </button>
-              </div>
-            </motion.div>
-          </aside>
-        </div>
-
-        <footer className="text-center text-sm text-blue-300 mt-16 mb-8">
-          © 2025 <span className="font-semibold text-blue-400">714 Chat</span> •
-          Built with ❤️ on Base
+        {/* FOOTER */}
+        <footer className="text-center text-sm text-blue-300 dark:text-blue-700 mt-16 mb-8">
+          © 2025 <span className="font-semibold text-blue-400 dark:text-blue-800">714 Chat</span> •
+          Built with 💙 on Base
         </footer>
       </main>
     </div>

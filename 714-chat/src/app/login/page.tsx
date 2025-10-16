@@ -10,7 +10,7 @@ export default function LoginPage() {
   const [isSignUp, setIsSignUp] = useState(false)
 
   const handleGoogleLogin = async () => {
-    const redirectUrl = `${window.location.origin}/chat` // dynamic domain
+    const redirectUrl = `${window.location.origin}/auth/callback` // dynamic domain
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {

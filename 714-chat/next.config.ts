@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+
   images: {
     remotePatterns: [
       // Supabase Storage (avatars + chat uploads)
@@ -11,6 +12,7 @@ const nextConfig: NextConfig = {
         port: "",
         pathname: "/storage/v1/object/public/**",
       },
+
       // Tenor GIFs
       {
         protocol: "https",
@@ -18,6 +20,7 @@ const nextConfig: NextConfig = {
         port: "",
         pathname: "/**",
       },
+
       // Giphy fallback
       {
         protocol: "https",
@@ -25,6 +28,7 @@ const nextConfig: NextConfig = {
         port: "",
         pathname: "/**",
       },
+
       // Common OAuth avatars (GitHub, Google, Discord)
       {
         protocol: "https",
@@ -44,10 +48,19 @@ const nextConfig: NextConfig = {
         port: "",
         pathname: "/**",
       },
+
+      // ✅ Add postimg.cc (for your 714.jpg image)
+      {
+        protocol: "https",
+        hostname: "i.postimg.cc",
+        port: "",
+        pathname: "/**",
+      },
     ],
     formats: ["image/avif", "image/webp"], // better compression
   },
-  // optional security / optimization
+
+  // Optional security and optimization headers
   async headers() {
     return [
       {
@@ -70,9 +83,11 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+
   eslint: {
     ignoreDuringBuilds: true, // optional for Supabase quick builds
   },
+
   typescript: {
     ignoreBuildErrors: true, // optional: prevents build block while prototyping
   },
