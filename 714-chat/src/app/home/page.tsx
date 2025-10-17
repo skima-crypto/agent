@@ -8,7 +8,6 @@ import { supabase } from "@/lib/supabaseClient";
 import { motion } from "framer-motion";
 import { Toaster, toast } from "react-hot-toast";
 import { Github, Twitter } from "lucide-react";
-import Image from "next/image";
 import { useTheme } from "next-themes";
 
 export default function HomePage() {
@@ -20,7 +19,6 @@ export default function HomePage() {
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
 
-  // Read theme from next-themes so we can add 'dark' class on this root element
   const { theme: themeRaw, systemTheme } = useTheme();
   const theme = themeRaw === "system" ? systemTheme : themeRaw;
 
@@ -109,20 +107,80 @@ export default function HomePage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-blue-900 via-indigo-900 to-black text-white">
-        <motion.div
-          animate={{ opacity: [0.3, 1, 0.3] }}
-          transition={{ duration: 1.5, repeat: Infinity }}
-          className="text-2xl font-semibold tracking-widest"
-        >
-          Initializing 714 Chat...
-        </motion.div>
-      </div>
-    );
-  }
+  return (
+    <div className="flex flex-col items-center justify-center h-screen bg-gradient-to-br from-blue-900 via-indigo-900 to-black text-white relative overflow-hidden">
+      {/* Background pulsing glow */}
+      <motion.div
+        initial={{ opacity: 0.15, scale: 0.8 }}
+        animate={{
+          opacity: [0.15, 0.4, 0.15],
+          scale: [0.9, 1.05, 0.9],
+          rotate: [0, 360],
+        }}
+        transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
+        className="absolute w-96 h-96 rounded-full bg-blue-600/20 blur-3xl"
+      />
 
-  // Add 'dark' class locally so tailwind dark: variants apply to the whole subtree
+      {/* Logo inside circular container */}
+      <div className="relative flex items-center justify-center mb-10">
+        {/* Rotating outer ring */}
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+          className="absolute w-44 h-44 sm:w-56 sm:h-56 rounded-full border border-blue-400/30 shadow-[0_0_40px_rgba(59,130,246,0.3)]"
+        />
+
+        {/* Inner circular glass container */}
+        <div className="w-32 h-32 sm:w-36 sm:h-36 rounded-full bg-white/10 backdrop-blur-lg border border-white/20 shadow-xl overflow-hidden flex items-center justify-center">
+          <motion.img
+            src="https://i.postimg.cc/t4b28Nt9/714BG.jpg"
+            alt="714 Logo"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: [0.5, 1, 0.5], scale: [0.95, 1, 0.95] }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+            className="w-28 h-28 rounded-full object-cover"
+          />
+        </div>
+      </div>
+
+      {/* Loading text */}
+      <motion.div
+        animate={{ opacity: [0.4, 1, 0.4] }}
+        transition={{ duration: 1.5, repeat: Infinity }}
+        className="text-xl sm:text-2xl font-semibold tracking-widest text-center z-10 mb-4"
+      >
+        Initializing&nbsp;
+        <span className="text-blue-400">AGENT&nbsp;714</span>...
+      </motion.div>
+
+      {/* Animated loading bar */}
+      <div className="relative w-64 h-2 rounded-full bg-white/10 overflow-hidden">
+        <motion.div
+          initial={{ x: "-100%" }}
+          animate={{ x: "100%" }}
+          transition={{
+            duration: 2,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+          className="absolute left-0 top-0 h-full w-1/3 bg-gradient-to-r from-blue-400 via-blue-300 to-transparent"
+        />
+      </div>
+
+      {/* Subtle floating code sparks */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: [0, 0.3, 0] }}
+        transition={{ duration: 3, repeat: Infinity, delay: 1 }}
+        className="absolute text-xs text-blue-300/50 bottom-10 font-mono tracking-widest"
+      >
+        SYSTEM&nbsp;BOOT&nbsp;—&nbsp;714.AI&nbsp;ACTIVE
+      </motion.div>
+    </div>
+  );
+}
+
+
   const rootThemeClass = theme === "dark" ? "dark" : "";
 
   return (
@@ -132,7 +190,9 @@ export default function HomePage() {
         <Sidebar />
 
         <main className="flex-1 lg:ml-64 p-6 relative z-10 flex flex-col items-center transition-colors duration-500">
-          {/* Elegant animated background shapes */}
+          <div className="max-w-7xl w-full mx-auto flex flex-col items-center">
+
+          {/* Animated background */}
           <div className="absolute inset-0 -z-10 overflow-hidden">
             <motion.div
               className="absolute left-[-10%] top-10 w-96 h-96 rounded-full opacity-30 blur-3xl bg-gradient-to-br from-blue-400 to-cyan-300"
@@ -144,69 +204,95 @@ export default function HomePage() {
               animate={{ y: [0, -20, 0] }}
               transition={{ duration: 9, repeat: Infinity }}
             />
-            {/* subtle overlay to accent dark/light */}
             <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-white/2 dark:from-transparent dark:to-transparent pointer-events-none" />
           </div>
 
-          {/* HEADER */}
-          <motion.header
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="w-full max-w-4xl flex flex-col items-center gap-3 mb-8"
-          >
-            <div className="flex items-center gap-4">
-              <Image
-                src="https://i.postimg.cc/CM3TC7Lm/714.jpg"
-                alt="714 Chat Logo"
-                width={84}
-                height={84}
-                className="rounded-2xl shadow-lg"
-              />
-              <div className="text-left">
-                <h1 className="text-4xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-cyan-400 to-indigo-600">
-                  714 Chat
-                </h1>
-                <p className="text-sm text-slate-700 dark:text-slate-200">
-                  Chat globally, tip on-chain, and explore decentralized social
-                  connections.
-                </p>
-              </div>
+          {/* Header */}
+<header className="w-full flex items-center justify-between py-6">
+  <div className="flex items-center gap-3">
+    <span className="text-xl font-semibold text-slate-800 dark:text-white">
+      🟦AGENT 714
+    </span>
+    <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 dark:bg-white/5 border border-white/10">
+      <span className="text-xs text-blue-200 dark:text-blue-400 font-medium">
+        Base Network
+      </span>
+    </div>
+  </div>
+
+  <div className="flex items-center gap-3">
+    <ThemeToggle />
+    {sessionUser && (
+      <button
+        onClick={handleLogout}
+        className="px-3 py-2 rounded-xl border border-white/20 bg-white/5 text-sm text-white/90 hover:opacity-90 transition"
+      >
+        Logout
+      </button>
+    )}
+  </div>
+</header>
+
+{/* Hero Intro */}
+<section className="flex justify-center mt-10 mb-8">
+  <motion.div
+    initial={{ opacity: 0, scale: 0.9, y: 20 }}
+    animate={{ opacity: 1, scale: 1, y: 0 }}
+    transition={{ duration: 0.8, ease: 'easeOut' }}
+    className="relative text-center max-w-3xl w-full p-8 rounded-3xl
+               bg-white/30 dark:bg-white/5 backdrop-blur-lg 
+               border border-white/20 shadow-lg overflow-hidden"
+  >
+    {/* Animated background glow */}
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 0.3 }}
+      transition={{ delay: 0.6, duration: 1.5 }}
+      className="absolute inset-0 bg-gradient-to-br from-blue-400/30 via-purple-500/20 to-transparent blur-3xl -z-10"
+    />
+
+    <motion.h1
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.7 }}
+      className="text-4xl sm:text-5xl font-bold text-slate-900 dark:text-white mb-4"
+    >
+      Welcome to <span className="text-blue-500">714 Chat</span>
+    </motion.h1>
+
+    <motion.p
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.2, duration: 0.8 }}
+      className="text-base sm:text-lg text-slate-700 dark:text-slate-300 max-w-2xl mx-auto"
+    >
+      On-chain social experience where you can chat, tip friends in ETH,
+      and explore the Base network, powered by <span className="font-semibold text-blue-500">Agent 714</span>,
+      your built-in crypto assistant for live prices, charts, and insights.
+    </motion.p>
+  </motion.div>
+</section>
+
+
+            <div className="flex items-center gap-3">
+              <ThemeToggle />
+              {sessionUser && (
+                <button
+                  onClick={handleLogout}
+                  className="px-3 py-2 rounded-xl border border-white/20 dark:border-white/10 bg-white/5 text-sm text-white/90 hover:opacity-90 transition"
+                >
+                  Logout
+                </button>
+              )}
             </div>
+          </div>
 
-            <div className="w-full flex items-center justify-between mt-2">
-              <div className="flex items-center gap-3">
-                <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 dark:bg-white/5 border border-white/10 dark:border-white/5">
-                  <span className="text-xs text-blue-200 dark:text-blue-400 font-medium">
-                    Based 🟦
-                  </span>
-                  <span className="text-xs text-slate-300 dark:text-slate-200">
-                    🔵 • 💙
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                {/* Keep your ThemeToggle component, it uses next-themes */}
-                <ThemeToggle />
-                {sessionUser ? (
-                  <button
-                    onClick={handleLogout}
-                    className="px-3 py-2 rounded-xl border border-white/20 dark:border-white/10 bg-white/5 dark:bg-white/5 text-sm text-white/90 dark:text-slate-200 hover:opacity-90 transition"
-                  >
-                    Logout
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          </motion.header>
-
-          {/* CENTERED BOX */}
+          {/* Auth Section */}
           <motion.section
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            className="w-full max-w-3xl rounded-2xl p-8 shadow-2xl backdrop-blur-md border border-white/10 bg-white/30 dark:bg-slate-800/60 dark:border-slate-700"
+            className="w-full max-w-3xl rounded-2xl p-8 shadow-2xl backdrop-blur-md border border-white/10 bg-white/30 dark:bg-slate-800/60 dark:border-slate-700 mt-6"
           >
             <div className="text-center mb-6">
               <h2 className="text-2xl font-semibold text-slate-800 dark:text-slate-100">
@@ -220,24 +306,22 @@ export default function HomePage() {
             <div className="flex flex-col items-center gap-6">
               {!sessionUser ? (
                 <>
-                  <div className="w-full">
-                    <button
-                      onClick={handleGoogleLogin}
-                      className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl bg-white text-slate-800 font-semibold shadow hover:brightness-95 transition"
+                  <button
+                    onClick={handleGoogleLogin}
+                    className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl bg-white text-slate-800 font-semibold shadow hover:brightness-95 transition"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5"
+                      viewBox="0 0 48 48"
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-5 w-5"
-                        viewBox="0 0 48 48"
-                      >
-                        <path
-                          fill="#fbc02d"
-                          d="M43.6 20.6H42V20H24v8h11.3C34.1 31.2 29.6 34 24 34c-7.7 0-14-6.3-14-14s6.3-14 14-14c3.6 0 6.8 1.4 9.3 3.7l6.2-6.2C36.6 2.7 30.7 0 24 0 10.7 0 0 10.7 0 24s10.7 24 24 24c12.1 0 22.1-8.7 23.6-20H43.6z"
-                        />
-                      </svg>
-                      Sign in with Google
-                    </button>
-                  </div>
+                      <path
+                        fill="#fbc02d"
+                        d="M43.6 20.6H42V20H24v8h11.3C34.1 31.2 29.6 34 24 34c-7.7 0-14-6.3-14-14s6.3-14 14-14c3.6 0 6.8 1.4 9.3 3.7l6.2-6.2C36.6 2.7 30.7 0 24 0 10.7 0 0 10.7 0 24s10.7 24 24 24c12.1 0 22.1-8.7 23.6-20H43.6z"
+                      />
+                    </svg>
+                    Sign in with Google
+                  </button>
 
                   <form
                     onSubmit={handleAuthSubmit}
@@ -249,7 +333,7 @@ export default function HomePage() {
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="Email"
                       type="email"
-                      className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/80 dark:bg-slate-700 dark:border-slate-600 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
+                      className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/80 dark:bg-slate-700 dark:border-slate-600 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-400 transition"
                       required
                     />
                     <input
@@ -257,7 +341,7 @@ export default function HomePage() {
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Password"
                       type="password"
-                      className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/80 dark:bg-slate-700 dark:border-slate-600 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
+                      className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/80 dark:bg-slate-700 dark:border-slate-600 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-400 transition"
                       required
                     />
                     <button
@@ -292,7 +376,6 @@ export default function HomePage() {
                 </div>
               )}
 
-              {/* Reach Us */}
               <div className="flex flex-col items-center mt-6 text-center">
                 <p className="text-sm text-slate-600 dark:text-slate-300 mb-2">
                   Reach us / Connect with:
@@ -319,7 +402,7 @@ export default function HomePage() {
             </div>
           </motion.section>
 
-          {/* AI AGENT BOX */}
+          {/* AI Agent Section */}
           <motion.section
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -331,24 +414,31 @@ export default function HomePage() {
               <div className="absolute -right-8 -bottom-6 w-44 h-44 rounded-full bg-indigo-400/10 dark:bg-indigo-500/10 blur-2xl" />
 
               <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-2">
-                🤖 AI Agent — Coming Soon!
+                🤖 Meet Agent 714
               </h3>
-              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mb-4">
-                A self-learning robotic assistant designed to moderate chats,
-                summarize discussions, and generate new on-chain experiences.
-                Imagine an AI that interacts natively with Base to help your
-                community grow, discover trends, and automate engagement.
+              <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
+                Agent 714 helps you track tokens, prices, and explore Base
+                network insights. Paste any token or contract to see data live.
               </p>
+
+              <ul className="list-disc list-inside text-sm text-slate-600 dark:text-slate-300 mb-5 space-y-1">
+                <li>Live token prices & charts</li>
+                <li>Base network insights</li>
+                <li>Trending projects</li>
+              </ul>
+
               <motion.button
-                whileHover={{ scale: 1.03 }}
-                className="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 text-white font-medium shadow"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => (window.location.href = "/agent")}
+                className="px-5 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium shadow hover:shadow-blue-500/30 transition"
               >
-                Stay Tuned
+                🚀 Try Agent 714
               </motion.button>
             </div>
           </motion.section>
 
-          {/* FOOTER */}
+          {/* Footer */}
           <footer className="w-full max-w-3xl text-center text-sm text-slate-700 dark:text-slate-300 mt-12 mb-8">
             © 2025{" "}
             <span className="font-semibold text-blue-600 dark:text-blue-300">

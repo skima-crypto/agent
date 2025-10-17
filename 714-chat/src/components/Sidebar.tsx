@@ -123,7 +123,7 @@ const Sidebar = () => {
                   : "text-blue-600"
               }
             >
-              714
+              -714
             </span>
           </motion.h1>
 

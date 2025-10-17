@@ -22,9 +22,8 @@ export default function LandingPage() {
 
   return (
     <div className="relative min-h-screen w-full bg-gray-950 text-white overflow-x-hidden">
-      {/* === Hero Section === */}
+      {/* Hero Section */}
       <div className="relative h-screen flex flex-col items-center justify-center text-center px-6">
-        {/* Background Image */}
         <Image
           src="/714.jpg"
           alt="background"
@@ -33,7 +32,6 @@ export default function LandingPage() {
           priority
         />
 
-        {/* Overlay Content */}
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
@@ -44,11 +42,10 @@ export default function LandingPage() {
             Welcome to <span className="text-blue-400">714 Chat</span>
           </h1>
           <p className="text-lg md:text-xl mb-10 text-gray-200 max-w-2xl mx-auto">
-            💬 A next-gen real-time chat experience — featuring profiles, reactions,
-            voice notes, and crypto tipping — all in one seamless space.
+            💬 A next-gen real-time chat experience featuring profiles, reactions,
+            voice notes, and crypto tipping all in one seamless space.
           </p>
 
-          {/* ✅ Enter App Button */}
           <button
             onClick={() => router.push('/home')}
             className="px-10 py-4 rounded-2xl font-bold text-lg bg-gradient-to-r from-blue-500 to-purple-600 shadow-xl hover:shadow-2xl hover:scale-105 transition-transform duration-300"
@@ -58,7 +55,7 @@ export default function LandingPage() {
         </motion.div>
       </div>
 
-      {/* === About Section (Chat + Profile System) === */}
+      {/* About Section */}
       <section className="relative z-20 py-20 bg-gray-900/70 backdrop-blur-md border-t border-gray-800">
         <div className="max-w-5xl mx-auto px-6 space-y-8">
           <motion.h2
@@ -96,7 +93,7 @@ export default function LandingPage() {
               >
                 <h4 className="font-semibold text-blue-300 mb-2">🗨️ Sending Messages</h4>
                 <p>
-                  Type and send messages instantly — attach images, GIFs, or record a quick
+                  Type and send messages instantly. Attach images, GIFs, or record a quick
                   voice note.
                 </p>
               </motion.div>
@@ -118,8 +115,8 @@ export default function LandingPage() {
               >
                 <h4 className="font-semibold text-blue-300 mb-2">👤 Viewing Profiles</h4>
                 <p>
-                  Tap on any user’s avatar to open their profile modal — check their wallet,
-                  send tips, or view details.
+                  Tap on any user’s avatar to open their profile modal and check wallet details
+                  or send tips.
                 </p>
               </motion.div>
 
@@ -136,15 +133,15 @@ export default function LandingPage() {
 
             <h3 className="text-2xl font-bold text-white mt-10 mb-4">✨ Summary</h3>
             <p className="text-gray-300 text-lg">
-              <strong>Click. Chat. Tip. Connect.</strong> — Everything happens inside one
-              seamless interface. Explore profiles, react with emojis, or send your
-              appreciation directly with a tip. Welcome to the future of social chat.
+              <strong>Click. Chat. Tip. Connect.</strong> Everything happens inside one
+              seamless interface. Explore profiles, react with emojis, and show appreciation
+              with a quick tip. Welcome to the future of social chat.
             </p>
           </motion.div>
         </div>
       </section>
 
-      {/* === AI Agent Section === */}
+      {/* AI Agent Section */}
       <section className="relative z-30 py-24 bg-gradient-to-b from-gray-900 via-gray-950 to-black border-t border-gray-800">
         <div className="max-w-5xl mx-auto px-6 text-center">
           <motion.h2
@@ -154,7 +151,7 @@ export default function LandingPage() {
             viewport={{ once: true }}
             className="text-5xl font-bold mb-6 text-purple-400"
           >
-            🤖 AI Agent — Coming Soon
+            🤖 Meet Agent 714
           </motion.h2>
 
           <motion.p
@@ -164,35 +161,45 @@ export default function LandingPage() {
             viewport={{ once: true }}
             className="text-gray-300 max-w-3xl mx-auto text-lg leading-relaxed"
           >
-            Meet your personal <strong>714 AI Companion</strong> — an intelligent assistant that
-            can chat, summarize messages, detect spam, and even generate replies in your style.
-            Built right into your chat experience, the AI Agent will make every conversation
-            smarter, faster, and more fun.
+            Your personal AI crypto companion. Ask questions about tokens, projects, or Base
+            network. Paste any contract address or token symbol and get instant live price
+            charts, feeds, and insights.
           </motion.p>
 
           <motion.div
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
+            transition={{ delay: 0.4 }}
             viewport={{ once: true }}
             className="mt-10 flex justify-center"
           >
             <div className="bg-gray-800/60 backdrop-blur-md border border-purple-500/40 rounded-2xl px-8 py-6 max-w-xl text-center shadow-lg hover:shadow-purple-600/30 transition">
               <h3 className="text-xl font-semibold text-purple-300 mb-2">
-                💡 What It Will Do
+                💡 What Agent 714 Can Do
               </h3>
               <ul className="text-gray-300 list-disc list-inside text-left space-y-1">
-                <li>Auto-suggest smart replies</li>
-                <li>Analyze tone and sentiment</li>
-                <li>Summarize long conversations</li>
-                <li>Detect toxic content or spam</li>
-                <li>Generate creative responses</li>
+                <li>Check live token prices with real-time feeds</li>
+                <li>Display live price charts for any contract address or symbol</li>
+                <li>Answer questions about the Base network</li>
+                <li>Provide crypto insights and quick token overviews</li>
+                <li>Offer personalized guidance inside the chat app</li>
               </ul>
             </div>
           </motion.div>
 
+          <motion.button
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6 }}
+            viewport={{ once: true }}
+            onClick={() => router.push('/agent')}
+            className="mt-12 px-10 py-4 rounded-2xl font-bold text-lg bg-gradient-to-r from-purple-600 to-blue-500 shadow-xl hover:shadow-purple-500/40 hover:scale-105 transition-transform duration-300"
+          >
+            🚀 Try Agent 714 Now
+          </motion.button>
+
           <p className="text-gray-500 mt-10 italic">
-            ✨ Launching soon — powered by advanced AI and user personalization.
+            Powered by advanced AI and real-time crypto data.
           </p>
         </div>
       </section>
