@@ -402,41 +402,49 @@ export default function HomePage() {
             </div>
           </motion.section>
 
-          {/* AI Agent Section */}
-          <motion.section
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            className="w-full max-w-3xl mt-10 p-6 rounded-2xl shadow-lg bg-white/30 dark:bg-slate-800/60 border border-white/10 dark:border-slate-700 backdrop-blur-md"
-          >
-            <div className="relative overflow-hidden">
-              <div className="absolute -left-8 -top-8 w-36 h-36 rounded-full bg-blue-400/20 dark:bg-blue-500/10 blur-2xl" />
-              <div className="absolute -right-8 -bottom-6 w-44 h-44 rounded-full bg-indigo-400/10 dark:bg-indigo-500/10 blur-2xl" />
+          {/* 🚀 AI Agent Section */}
+<motion.section
+  initial={{ opacity: 0, y: 30 }}
+  animate={{ opacity: 1, y: 0 }}
+  transition={{ delay: 0.15 }}
+  className="relative w-full max-w-3xl mt-12 p-8 rounded-3xl shadow-2xl
+             bg-white/40 dark:bg-slate-800/50 border border-white/10 dark:border-slate-700
+             backdrop-blur-xl overflow-hidden"
+>
+  {/* Decorative Glow Effects */}
+  <div className="absolute -left-10 -top-10 w-40 h-40 rounded-full bg-blue-400/20 dark:bg-blue-500/10 blur-3xl" />
+  <div className="absolute -right-10 -bottom-10 w-52 h-52 rounded-full bg-indigo-400/20 dark:bg-indigo-500/10 blur-3xl" />
 
-              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-2">
-                🤖 Meet Agent 714
-              </h3>
-              <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
-                Agent 714 helps you track tokens, prices, and explore Base
-                network insights. Paste any token or contract to see data live.
-              </p>
+  {/* Content */}
+  <div className="relative text-center z-10">
+    <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-3">
+      🤖 Meet Agent 714
+    </h3>
+    <p className="text-sm md:text-base text-slate-600 dark:text-slate-300 mb-6 leading-relaxed max-w-2xl mx-auto">
+      Agent 714 is your AI companion for the Base network — tracking tokens, prices,
+      and on-chain insights in real time. Just paste a token or contract address
+      to explore instant analytics.
+    </p>
 
-              <ul className="list-disc list-inside text-sm text-slate-600 dark:text-slate-300 mb-5 space-y-1">
-                <li>Live token prices & charts</li>
-                <li>Base network insights</li>
-                <li>Trending projects</li>
-              </ul>
+    <ul className="text-sm md:text-base text-slate-600 dark:text-slate-300 mb-8 space-y-1 max-w-xs mx-auto text-left">
+      <li>⚡ Live token prices & charts</li>
+      <li>📊 Base network insights</li>
+      <li>🔥 Trending projects on Base</li>
+    </ul>
 
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => (window.location.href = "/agent")}
-                className="px-5 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium shadow hover:shadow-blue-500/30 transition"
-              >
-                🚀 Try Agent 714
-              </motion.button>
-            </div>
-          </motion.section>
+    {/* Centered Button */}
+    <motion.button
+      whileHover={{ scale: 1.05, y: -2 }}
+      whileTap={{ scale: 0.97 }}
+      onClick={() => (window.location.href = '/agent')}
+      className="mx-auto flex items-center justify-center px-6 py-3 rounded-xl
+                 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold
+                 shadow-lg shadow-blue-500/30 hover:shadow-indigo-500/40 transition-all duration-300"
+    >
+      🚀 Try Agent 714
+    </motion.button>
+  </div>
+</motion.section>
 
           {/* Footer */}
           <footer className="w-full max-w-3xl text-center text-sm text-slate-700 dark:text-slate-300 mt-12 mb-8">

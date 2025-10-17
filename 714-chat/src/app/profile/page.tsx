@@ -17,17 +17,33 @@ export default function ProfilePage() {
   const [walletAddress, setWalletAddress] = useState('');
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(true);
 
   const router = useRouter();
   const { address } = useAccount();
 
-  // Auto-fill wallet when connected
+  // Set dark mode as default + restore preference
+  useEffect(() => {
+    const storedTheme = localStorage.getItem('theme');
+    const prefersDark = storedTheme === 'dark' || !storedTheme;
+    setDarkMode(prefersDark);
+    document.documentElement.classList.toggle('dark', prefersDark);
+  }, []);
+
+  // Toggle dark/light
+  const toggleDark = () => {
+    const newMode = !darkMode;
+    setDarkMode(newMode);
+    document.documentElement.classList.toggle('dark', newMode);
+    localStorage.setItem('theme', newMode ? 'dark' : 'light');
+  };
+
+  // Auto-fill wallet
   useEffect(() => {
     if (address) setWalletAddress(address);
   }, [address]);
 
-  // Load user + existing profile
+  // Load user & profile
   useEffect(() => {
     const loadUser = async () => {
       const { data, error } = await supabase.auth.getUser();
@@ -38,13 +54,13 @@ export default function ProfilePage() {
 
       setUser(data.user);
 
-      const { data: profile, error: profileErr } = await supabase
+      const { data: profile } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', data.user.id)
         .maybeSingle();
 
-      if (!profileErr && profile) {
+      if (profile) {
         setUsername(profile.username || '');
         setAvatarUrl(profile.avatar_url || '');
         setWalletAddress(profile.wallet_address || '');
@@ -74,7 +90,6 @@ export default function ProfilePage() {
       const { error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(filePath, file, { upsert: true });
-
       if (uploadError) throw uploadError;
 
       const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
@@ -83,7 +98,6 @@ export default function ProfilePage() {
       const { error: upsertError } = await supabase
         .from('profiles')
         .upsert({ id: user.id, avatar_url: publicUrl }, { onConflict: 'id' });
-
       if (upsertError) throw upsertError;
 
       setAvatarUrl(publicUrl);
@@ -122,116 +136,128 @@ export default function ProfilePage() {
     }
   };
 
-  // Toggle dark mode
-  const toggleDark = () => {
-    setDarkMode(!darkMode);
-    document.documentElement.classList.toggle('dark', !darkMode);
-  };
-
   return (
     <div
       className={`min-h-screen transition-colors duration-500 ${
-        darkMode ? 'bg-gradient-to-b from-gray-900 to-gray-800 text-gray-100' : 'bg-gradient-to-b from-blue-50 to-white text-gray-800'
+        darkMode
+          ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-black text-gray-100'
+          : 'bg-gradient-to-br from-blue-50 via-white to-gray-100 text-gray-900'
       }`}
     >
-      {/* Header + Sidebar */}
       <ChatHeader currentUserId={user?.id} setSelectedProfile={() => {}} onSearch={() => {}} />
+
       <div className="flex">
         <aside className="hidden md:block w-64 p-6">
           <Sidebar />
         </aside>
 
-        <main className="flex-1 flex flex-col items-center justify-center py-16 px-6">
+        <main className="flex-1 flex flex-col items-center justify-center py-20 px-6 relative">
+          {/* Dark Mode Toggle */}
+          <button
+            onClick={toggleDark}
+            className="absolute top-8 right-8 flex items-center gap-2 px-3 py-2 rounded-full bg-white/10 hover:bg-white/20 dark:bg-black/20 dark:hover:bg-black/30 backdrop-blur-md transition"
+          >
+            {darkMode ? (
+              <>
+                <Sun className="text-yellow-400 w-5 h-5" />
+                <span className="text-sm font-medium">Light</span>
+              </>
+            ) : (
+              <>
+                <Moon className="text-blue-600 w-5 h-5" />
+                <span className="text-sm font-medium">Dark</span>
+              </>
+            )}
+          </button>
+
+          {/* Profile Card */}
           <div
-            className={`relative rounded-3xl shadow-2xl p-10 w-full max-w-md border ${
-              darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-blue-100'
+            className={`relative w-full max-w-lg rounded-3xl border backdrop-blur-xl shadow-2xl transition p-10 ${
+              darkMode
+                ? 'bg-gray-800/60 border-gray-700 text-gray-100'
+                : 'bg-white/70 border-blue-100 text-gray-900'
             }`}
           >
-            {/* Dark/Light Toggle */}
-            <button
-              onClick={toggleDark}
-              className="absolute top-5 right-5 p-2 rounded-full bg-opacity-20 hover:bg-opacity-30 transition"
-            >
-              {darkMode ? <Sun className="text-yellow-300" /> : <Moon className="text-blue-600" />}
-            </button>
-
-            <h2 className="text-3xl font-bold mb-2 text-center">
-              Customize Your Profile ✨
-            </h2>
-            <p className="text-gray-500 dark:text-gray-400 text-center mb-6">
-              Set your username, avatar, and wallet to get started.
-            </p>
-
-            {/* Avatar */}
-            <div className="relative group mb-8 flex justify-center">
-              {avatarUrl ? (
-                <div className="relative">
-                  <Image
-                    src={avatarUrl}
-                    alt="avatar"
-                    width={120}
-                    height={120}
-                    className="rounded-full border-4 border-blue-500 dark:border-blue-400 object-cover shadow-lg group-hover:scale-105 transition-transform"
-                    unoptimized
-                  />
+            {/* Floating Profile Image */}
+            <div className="absolute -top-20 left-1/2 -translate-x-1/2">
+              <div className="relative group">
+                {avatarUrl ? (
+                  <div className="relative">
+                    <Image
+                      src={avatarUrl}
+                      alt="avatar"
+                      width={140}
+                      height={140}
+                      unoptimized
+                      className="object-cover rounded-2xl border-4 border-blue-500 dark:border-blue-400 shadow-xl group-hover:scale-105 transition-transform"
+                    />
+                    <label
+                      htmlFor="avatar-upload"
+                      className="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 group-hover:opacity-100 rounded-2xl text-sm cursor-pointer transition"
+                    >
+                      Change
+                    </label>
+                  </div>
+                ) : (
                   <label
                     htmlFor="avatar-upload"
-                    className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-40 opacity-0 group-hover:opacity-100 text-white text-xs rounded-full cursor-pointer transition"
+                    className="w-36 h-36 bg-gray-300 dark:bg-gray-700 rounded-2xl flex items-center justify-center text-gray-500 dark:text-gray-400 cursor-pointer hover:scale-105 transition-transform"
                   >
-                    Change
+                    Upload
                   </label>
-                </div>
-              ) : (
-                <label
-                  htmlFor="avatar-upload"
-                  className="w-28 h-28 bg-gray-300 dark:bg-gray-600 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-300 cursor-pointer"
-                >
-                  Upload
-                </label>
-              )}
+                )}
+                <input
+                  id="avatar-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={uploadAvatar}
+                  className="hidden"
+                  disabled={uploading}
+                />
+              </div>
+            </div>
+
+            <div className="mt-24 text-center">
+              <h2 className="text-3xl font-bold mb-2">Your Profile</h2>
+              <p className="text-gray-400 text-sm mb-8">
+                Manage your username, avatar, and wallet address.
+              </p>
+            </div>
+
+            {/* Inputs */}
+            <div className="space-y-4">
               <input
-                id="avatar-upload"
-                type="file"
-                accept="image/*"
-                onChange={uploadAvatar}
-                className="hidden"
-                disabled={uploading}
+                type="text"
+                placeholder="Enter your username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+
+              <input
+                type="text"
+                placeholder="Your wallet address"
+                value={walletAddress}
+                onChange={(e) => setWalletAddress(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
-            {/* Username */}
-            <input
-              type="text"
-              placeholder="Enter your username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-4 py-2 rounded-xl mb-4 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
-            />
-
-            {/* Wallet Address */}
-            <input
-              type="text"
-              placeholder="Your wallet address"
-              value={walletAddress}
-              onChange={(e) => setWalletAddress(e.target.value)}
-              className="w-full px-4 py-2 rounded-xl mb-6 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
-            />
-
             {/* Wallet Connect */}
-            <div className="mb-6 flex justify-center">
+            <div className="mt-6 flex justify-center">
               <ConnectButton />
             </div>
 
             {/* Email */}
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 text-center">
+            <p className="text-center text-gray-500 dark:text-gray-400 text-sm mt-6 mb-4">
               {user?.email}
             </p>
 
-            {/* Save */}
+            {/* Save Button */}
             <button
               onClick={saveProfile}
               disabled={saving}
-              className={`w-full py-3 rounded-xl font-semibold transition ${
+              className={`w-full py-3 mt-4 font-semibold rounded-xl transition transform hover:scale-[1.02] ${
                 darkMode
                   ? 'bg-blue-500 hover:bg-blue-600 text-white'
                   : 'bg-blue-600 hover:bg-blue-700 text-white'
