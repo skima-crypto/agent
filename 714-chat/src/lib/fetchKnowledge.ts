@@ -12,7 +12,7 @@ export async function fetchKnowledgeSummary(query: string) {
     const gecko = await tryCoinGecko(formatted);
     if (gecko) return gecko;
 
-    
+
     // 3️⃣ CryptoPanic (real-time news headlines)
     const cryptoNews = await tryCryptoPanic(formatted);
     if (cryptoNews) return cryptoNews;
@@ -25,7 +25,7 @@ export async function fetchKnowledgeSummary(query: string) {
     const defi = await tryDefiLlama(formatted);
     if (defi) return defi;
 
-    // 6️⃣ CoinDesk RSS (keyword filter)
+    // 6️⃣ CoinDesk RSS (keywords filter)
     const coindesk = await tryCoinDesk(formatted);
     if (coindesk) return coindesk;
 
