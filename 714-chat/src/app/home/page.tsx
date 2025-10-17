@@ -150,7 +150,7 @@ export default function HomePage() {
         className="text-xl sm:text-2xl font-semibold tracking-widest text-center z-10 mb-4"
       >
         Initializing&nbsp;
-        <span className="text-blue-400">AGENT&nbsp;714</span>...
+        <span className="text-blue-400">AGENT&nbsp;</span>
       </motion.div>
 
       {/* Animated loading bar */}

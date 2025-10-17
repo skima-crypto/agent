@@ -8,6 +8,8 @@ import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 import TokenChartEmbed from "@/components/TokenChartEmbed";
 import ProfileModal from "@/components/ProfileModal";
+import AgentLoader from "@/components/AgentLoader";
+
 
 interface AgentMessage {
   role: "user" | "agent";
@@ -25,6 +27,8 @@ export default function AgentPage() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [showProfile, setShowProfile] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
+
 
   /* ---------------- 🧩 Session Check ---------------- */
   useEffect(() => {
@@ -32,6 +36,7 @@ export default function AgentPage() {
       const { data } = await supabase.auth.getUser();
       if (!data?.user) router.push("/home");
       else setUserId(data.user.id);
+      setSessionLoading(false);
     };
     checkUser();
   }, [router]);
@@ -111,6 +116,10 @@ export default function AgentPage() {
       : "bg-gray-100 border-gray-300";
   const borderColor =
     theme === "dark" ? "border-gray-800" : "border-gray-300";
+
+    if (sessionLoading)
+  return <AgentLoader label="Initializing Agent 714 Environment..." />;
+
 
   return (
     <div className={`flex flex-col h-screen transition-colors duration-500 ${bgColor}`}>

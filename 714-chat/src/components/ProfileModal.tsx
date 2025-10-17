@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
+import AgentLoader from "@/components/AgentLoader";
 import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ethers } from 'ethers'
@@ -203,12 +204,7 @@ if (selectedToken.symbol === 'USDC' && parseFloat(amount) > 100) {
 
   // --- Render ---
   if (!userId) return null
-  if (loading)
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-black/60 text-white z-50">
-        Loading profile...
-      </div>
-    )
+  if (loading) return <AgentLoader label="Fetching Profile Data..." />;
 
   return (
     <AnimatePresence>
