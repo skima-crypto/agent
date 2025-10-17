@@ -178,10 +178,10 @@ export default function HomePage() {
               <div className="flex items-center gap-3">
                 <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 dark:bg-white/5 border border-white/10 dark:border-white/5">
                   <span className="text-xs text-blue-200 dark:text-blue-400 font-medium">
-                    Brand
+                    Based 🟦
                   </span>
                   <span className="text-xs text-slate-300 dark:text-slate-200">
-                    Blue • White
+                    🔵 • 💙
                   </span>
                 </div>
               </div>
