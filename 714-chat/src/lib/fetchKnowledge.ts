@@ -12,6 +12,7 @@ export async function fetchKnowledgeSummary(query: string) {
     const gecko = await tryCoinGecko(formatted);
     if (gecko) return gecko;
 
+    
     // 3️⃣ CryptoPanic (real-time news headlines)
     const cryptoNews = await tryCryptoPanic(formatted);
     if (cryptoNews) return cryptoNews;
