@@ -27,11 +27,9 @@ const Sidebar = () => {
   const [aiOpen, setAiOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [comingSoon, setComingSoon] = useState<string | null>(null);
-
   const router = useRouter();
   const pathname = usePathname();
 
-  // Load preferred theme
   useEffect(() => {
     const saved = localStorage.getItem("theme");
     if (saved === "dark") {
@@ -40,7 +38,6 @@ const Sidebar = () => {
     }
   }, []);
 
-  // Toggle dark/light mode
   const toggleTheme = () => {
     if (theme === "light") {
       document.documentElement.classList.add("dark");
@@ -83,10 +80,13 @@ const Sidebar = () => {
       {/* Sidebar */}
       <aside
         className={`fixed top-0 left-0 h-full z-40 flex flex-col justify-between border-r transition-all duration-300 ease-in-out
-        bg-gradient-to-b from-[#0f172a]/90 to-[#020617]/95 dark:from-gray-100/90 dark:to-gray-200/90
-        backdrop-blur-xl border-blue-900/20 dark:border-gray-300/40
-        ${open ? "translate-x-0" : "-translate-x-full"} 
-        lg:translate-x-0 lg:w-64 w-64 shadow-[0_0_25px_rgba(37,99,235,0.2)]`}
+        ${
+          theme === "dark"
+            ? "bg-gradient-to-b from-gray-100 to-gray-300 text-gray-900 border-gray-300/40"
+            : "bg-gradient-to-b from-[#0f172a]/90 to-[#020617]/95 text-blue-100 border-blue-900/20"
+        }
+        backdrop-blur-xl lg:translate-x-0 lg:w-64 w-64 shadow-[0_0_25px_rgba(37,99,235,0.2)]
+        ${open ? "translate-x-0" : "-translate-x-full"}`}
       >
         {/* TOP SECTION */}
         <div className="flex flex-col items-center mt-8 space-y-8">
@@ -109,16 +109,34 @@ const Sidebar = () => {
           <motion.h1
             animate={{ opacity: [0.7, 1, 0.7] }}
             transition={{ duration: 3, repeat: Infinity }}
-            className="text-2xl font-extrabold text-blue-400 dark:text-blue-700 tracking-tight"
+            className={`text-2xl font-extrabold tracking-tight ${
+              theme === "dark"
+                ? "text-blue-800"
+                : "text-blue-400"
+            }`}
           >
-            AGENT<span className="text-blue-600 dark:text-blue-900">  714</span>
+            AGENT
+            <span
+              className={
+                theme === "dark"
+                  ? "text-blue-900"
+                  : "text-blue-600"
+              }
+            >
+              714
+            </span>
           </motion.h1>
 
           {/* Theme Toggle */}
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={toggleTheme}
-            className="flex items-center gap-2 text-blue-300 dark:text-blue-800 border border-blue-600/30 dark:border-gray-400/40 px-3 py-2 rounded-xl hover:bg-blue-950/40 dark:hover:bg-gray-300/40 transition"
+            className={`flex items-center gap-2 border px-3 py-2 rounded-xl font-medium transition
+              ${
+                theme === "dark"
+                  ? "text-gray-900 border-gray-400 hover:bg-gray-300/50"
+                  : "text-blue-300 border-blue-600/30 hover:bg-blue-950/40"
+              }`}
           >
             {theme === "light" ? <Moon size={18} /> : <Sun size={18} />}
             <span className="text-sm">
@@ -139,36 +157,51 @@ const Sidebar = () => {
                     ${
                       isActive
                         ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg"
-                        : "text-blue-200 dark:text-blue-800 hover:bg-blue-900/30 dark:hover:bg-gray-300/40 hover:text-white dark:hover:text-gray-900"
+                        : theme === "dark"
+                        ? "text-gray-800 hover:bg-gray-200 hover:text-blue-800"
+                        : "text-blue-200 hover:bg-blue-900/30 hover:text-white"
                     }`}
                 >
                   <Icon size={18} />
                   <span>{name}</span>
-                  {isActive && (
-                    <motion.span
-                      layoutId="activeGlow"
-                      className="absolute inset-0 border border-blue-400/40 rounded-xl"
-                      transition={{ type: "spring", stiffness: 200, damping: 20 }}
-                    />
-                  )}
                 </motion.button>
               );
             })}
 
-            {/* AI AGENT Section */}
+            {/* AI Agent Section */}
             <div className="mt-4">
               <button
                 onClick={() => setAiOpen((prev) => !prev)}
-                className="flex items-center justify-between w-full px-4 py-2 rounded-xl text-blue-300 dark:text-blue-800 font-semibold text-sm bg-blue-950/40 hover:bg-blue-900/50 transition"
+                className={`flex items-center justify-between w-full px-4 py-2 rounded-xl font-semibold text-sm transition
+                  ${
+                    theme === "dark"
+                      ? "text-gray-800 bg-gray-200 hover:bg-gray-300"
+                      : "text-blue-300 bg-blue-950/40 hover:bg-blue-900/50"
+                  }`}
               >
                 <span className="flex items-center gap-2">
-                  <Sparkles size={16} className="text-blue-400" />
+                  <Sparkles
+                    size={16}
+                    className={
+                      theme === "dark" ? "text-blue-700" : "text-blue-400"
+                    }
+                  />
                   AI Agent Tools
                 </span>
                 {aiOpen ? (
-                  <ChevronUp size={16} className="text-blue-400" />
+                  <ChevronUp
+                    size={16}
+                    className={
+                      theme === "dark" ? "text-blue-700" : "text-blue-400"
+                    }
+                  />
                 ) : (
-                  <ChevronDown size={16} className="text-blue-400" />
+                  <ChevronDown
+                    size={16}
+                    className={
+                      theme === "dark" ? "text-blue-700" : "text-blue-400"
+                    }
+                  />
                 )}
               </button>
 
@@ -182,8 +215,8 @@ const Sidebar = () => {
                     className="mt-2 pl-6 flex flex-col gap-2"
                   >
                     {aiItems.map(({ name, icon: Icon, path }) => {
-                      const isActive = pathname === path;
                       const isSoon = path === "coming-soon";
+                      const isActive = pathname === path;
                       return (
                         <div key={name} className="flex flex-col">
                           <motion.button
@@ -200,14 +233,15 @@ const Sidebar = () => {
                               ${
                                 isActive
                                   ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white"
-                                  : "text-blue-300 hover:text-white hover:bg-blue-900/30"
+                                  : theme === "dark"
+                                  ? "text-gray-800 hover:bg-gray-200"
+                                  : "text-blue-300 hover:bg-blue-900/30 hover:text-white"
                               }`}
                           >
                             <Icon size={16} />
                             <span>{name}</span>
                           </motion.button>
 
-                          {/* Coming Soon Message */}
                           <AnimatePresence>
                             {comingSoon === name && (
                               <motion.p
@@ -215,7 +249,7 @@ const Sidebar = () => {
                                 animate={{ opacity: 1, height: "auto" }}
                                 exit={{ opacity: 0, height: 0 }}
                                 transition={{ duration: 0.3 }}
-                                className="ml-8 mt-1 text-xs text-blue-400 italic"
+                                className="ml-8 mt-1 text-xs italic text-blue-400"
                               >
                                 🚧 {name} — Coming soon!
                               </motion.p>
@@ -235,7 +269,13 @@ const Sidebar = () => {
         <div className="flex flex-col items-center mb-6 space-y-3">
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 bg-green-400 rounded-full animate-pulse" />
-            <span className="text-xs text-blue-300 dark:text-blue-800">
+            <span
+              className={
+                theme === "dark"
+                  ? "text-gray-700 text-xs"
+                  : "text-blue-300 text-xs"
+              }
+            >
               Online
             </span>
           </div>
@@ -250,7 +290,11 @@ const Sidebar = () => {
             <span>Logout</span>
           </motion.button>
 
-          <p className="text-xs text-blue-300 dark:text-blue-800">
+          <p
+            className={`text-xs ${
+              theme === "dark" ? "text-gray-700" : "text-blue-300"
+            }`}
+          >
             © 2025 <span className="font-semibold">714 Chat</span>
           </p>
         </div>

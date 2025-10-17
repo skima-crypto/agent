@@ -122,7 +122,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       reply: `I'm your **Crypto AI Agent 🤖** — try asking me:
 - \`$BTC price\`
-- \`Who founded Base network?\`
+- \`Base chain?\`
 - \`When was Ethereum launched?\`
 - Paste a token address (e.g. \`0x...\`) for live info + chart!
 - Or ask about any project, token, or blockchain!`,
