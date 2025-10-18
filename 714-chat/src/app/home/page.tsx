@@ -421,7 +421,7 @@ export default function HomePage() {
       🤖 Meet Agent 714
     </h3>
     <p className="text-sm md:text-base text-slate-600 dark:text-slate-300 mb-6 leading-relaxed max-w-2xl mx-auto">
-      Agent 714 is your AI companion for the Base network — tracking tokens, prices,
+      Agent 714 is your AI companion for the Base network, tracking tokens, prices,
       and on-chain insights in real time. Just paste a token or contract address
       to explore instant analytics.
     </p>
