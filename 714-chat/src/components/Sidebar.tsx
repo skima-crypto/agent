@@ -295,7 +295,7 @@ const Sidebar = () => {
               theme === "dark" ? "text-gray-700" : "text-blue-300"
             }`}
           >
-            © 2025 <span className="font-semibold">714 Chat</span>
+            © 2025 <span className="font-semibold">AGENT 714</span>
           </p>
         </div>
       </aside>

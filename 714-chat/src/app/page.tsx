@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import Footer from "@/components/Footer";
 import { supabase } from '@/lib/supabaseClient';
 import { motion } from 'framer-motion';
 
@@ -55,7 +56,7 @@ return (
           </h1>
 
           <p className="text-lg md:text-xl mb-10 text-gray-300 max-w-2xl mx-auto leading-relaxed">
-  ⚡ Connect. Chat. Have fun — fully onchain.
+  ⚡ Connect. Chat. Learn with Agent 714, Have fun, fully onchain.
 </p>
 
 
@@ -196,11 +197,11 @@ return (
             🚀 Try Agent 714 Now
           </motion.button>
 
-          <p className="text-gray-500 mt-10 italic">
-            Powered by Base.
-          </p>
+        
+ 
         </div>
       </section>
+ <Footer />
 
       {/* ================== GLOBAL STYLES ================== */}
       <style jsx global>{`

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import ThemeToggle from "@/components/ThemeToggle";
+import Footer from "@/components/Footer";
 import { supabase } from "@/lib/supabaseClient";
 import { motion } from "framer-motion";
 import { Toaster, toast } from "react-hot-toast";
@@ -184,12 +185,14 @@ export default function HomePage() {
   const rootThemeClass = theme === "dark" ? "dark" : "";
 
   return (
-    <div className={`${rootThemeClass} relative min-h-screen font-inter`}>
+  <div className={`${rootThemeClass} flex flex-col min-h-screen bg-[#0B0E17] font-inter`}>
       <Toaster position="top-right" />
-      <div className="flex">
+
+      <div className="flex flex-1">
         <Sidebar />
 
         <main className="flex-1 lg:ml-64 p-6 relative z-10 flex flex-col items-center transition-colors duration-500">
+
           <div className="max-w-7xl w-full mx-auto flex flex-col items-center">
 
           {/* Animated background */}
@@ -446,16 +449,11 @@ export default function HomePage() {
   </div>
 </motion.section>
 
-          {/* Footer */}
-          <footer className="w-full max-w-3xl text-center text-sm text-slate-700 dark:text-slate-300 mt-12 mb-8">
-            © 2025{" "}
-            <span className="font-semibold text-blue-600 dark:text-blue-300">
-              714 Chat
-            </span>{" "}
-            • Built with 💙 on Base
-          </footer>
-        </main>
+         </main>
       </div>
+
+      <Footer />
     </div>
   );
 }
+
