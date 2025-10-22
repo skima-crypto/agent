@@ -139,9 +139,10 @@ export default function ConnectPage() {
     setSearchResults(data);
   };
 
-  const handleOpenChat = (friendId: string) => {
-    router.push(`/connect/dm/${friendId}`);
-  };
+  const handleOpenChat = (friendUsername: string) => {
+  router.push(`/connect/dm/${friendUsername}`);
+};
+
 
   return (
     <div className="flex min-h-screen bg-gradient-to-b from-blue-950 to-blue-900 text-blue-100">

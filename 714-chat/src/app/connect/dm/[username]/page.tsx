@@ -146,7 +146,8 @@ const { data: msgs, error } = await supabase
       id, content, type, sender_id
     )
   `)
-  .or(`(sender_id.eq.${currentUser.id},receiver_id.eq.${friend?.id}), (sender_id.eq.${friend?.id},receiver_id.eq.${currentUser.id})`)
+  .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${friend?.id}),and(sender_id.eq.${friend?.id},receiver_id.eq.${currentUser.id})`)
+
 
   .order("created_at", { ascending: true });
 
@@ -173,7 +174,8 @@ if (error) {
   };
 
   loadMessages();
-}, [currentUser, username]);
+}, [currentUser, friend]);
+
 
 
   // ✅ Subscribe realtime for direct messages
@@ -194,11 +196,12 @@ if (error) {
 
           // Only push messages related to this chat
           if (
-            (msg.sender_id === username && msg.receiver_id === currentUser.id) ||
-            (msg.sender_id === currentUser.id && msg.receiver_id === username)
-          ) {
-            setMessages((prev) => [...prev, msg]);
-          }
+  (msg.sender_id === friend?.id && msg.receiver_id === currentUser.id) ||
+  (msg.sender_id === currentUser.id && msg.receiver_id === friend?.id)
+) {
+  setMessages((prev) => [...prev, msg]);
+}
+
         }
       )
       .subscribe();
@@ -208,7 +211,8 @@ if (error) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentUser, username]);
+  }, [currentUser, friend]);
+
 
 
         // ✅ Realtime listener for reactions
