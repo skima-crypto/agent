@@ -184,7 +184,14 @@ useEffect(() => {
       .subscribe();
 
 
-      // ✅ Realtime listener for reactions
+    // Cleanup on unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser, userId]);
+
+
+        // ✅ Realtime listener for reactions
 useEffect(() => {
   if (!currentUser) return;
 
@@ -210,13 +217,6 @@ useEffect(() => {
     supabase.removeChannel(channel);
   };
 }, [currentUser]);
-
-
-    // Cleanup on unmount
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [currentUser, userId]);
 
   // ✅ Auto scroll to bottom
   useEffect(() => {
