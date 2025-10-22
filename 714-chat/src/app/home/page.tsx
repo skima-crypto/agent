@@ -68,7 +68,7 @@ export default function HomePage() {
 
   const handleGoogleLogin = async () => {
     try {
-      const redirectUrl = `${window.location.origin}/chat`;
+      const redirectUrl = `${window.location.origin}/home`;
       await supabase.auth.signInWithOAuth({
         provider: "google",
         options: { redirectTo: redirectUrl },
