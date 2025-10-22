@@ -94,7 +94,7 @@ export default function DMPage() {
     const loadMessages = async () => {
       if (!currentUser) return;
       const { data } = await supabase
-        .from("messages")
+        .from("direct_messages")
         .select("*")
         .or(
           `and(sender_id.eq.${currentUser.id},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${currentUser.id})`
@@ -105,30 +105,39 @@ export default function DMPage() {
     loadMessages();
   }, [currentUser, userId]);
 
-  // ✅ Subscribe realtime
-  useEffect(() => {
-    if (!currentUser) return;
-    const channel = supabase
-      .channel("messages")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages" },
-        (payload) => {
-          const msg = payload.new as any;
-          if (
-            (msg.sender_id === userId && msg.receiver_id === currentUser.id) ||
-            (msg.sender_id === currentUser.id && msg.receiver_id === userId)
-          ) {
-            setMessages((prev) => [...prev, msg]);
-          }
-        }
-      )
-      .subscribe();
+// ✅ Subscribe realtime for direct messages
+useEffect(() => {
+  if (!currentUser) return;
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [currentUser, userId]);
+  const channel = supabase
+    .channel("direct_messages") // channel name can match the table name
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "direct_messages",
+      },
+      (payload) => {
+        const msg = payload.new as any;
+
+        // Only push messages related to this chat
+        if (
+          (msg.sender_id === userId && msg.receiver_id === currentUser.id) ||
+          (msg.sender_id === currentUser.id && msg.receiver_id === userId)
+        ) {
+          setMessages((prev) => [...prev, msg]);
+        }
+      }
+    )
+    .subscribe();
+
+  // Cleanup on unmount
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, [currentUser, userId]);
+
 
   // ✅ Auto scroll to bottom
   useEffect(() => {
@@ -138,7 +147,7 @@ export default function DMPage() {
   // ✅ Send message
   const sendMessage = async (type = "text", content = newMessage) => {
     if (!content.trim()) return;
-    const { error } = await supabase.from("messages").insert({
+   const { error } = await supabase.from("direct_messages").insert({
       sender_id: currentUser.id,
       receiver_id: userId,
       content,
@@ -155,13 +164,13 @@ export default function DMPage() {
     const path = `${currentUser.id}/${Date.now()}.${ext}`;
 
     const { data, error } = await supabase.storage
-      .from("chat_uploads")
+      .from("chat-uploads")
       .upload(path, file);
 
     if (error) return console.error(error);
 
     const { data: publicUrl } = supabase.storage
-      .from("chat_uploads")
+      .from("chat-uploads")
       .getPublicUrl(data.path);
 
     await sendMessage(file.type.startsWith("video") ? "video" : "image", publicUrl.publicUrl);
@@ -171,11 +180,11 @@ export default function DMPage() {
   const handleVoiceUpload = async (file: File) => {
     const path = `${currentUser.id}/${Date.now()}.webm`;
     const { data, error } = await supabase.storage
-      .from("chat_uploads")
+      .from("chat-uploads")
       .upload(path, file);
     if (error) return console.error(error);
     const { data: publicUrl } = supabase.storage
-      .from("chat_uploads")
+      .from("chat-uploads")
       .getPublicUrl(data.path);
     await sendMessage("audio", publicUrl.publicUrl);
   };
