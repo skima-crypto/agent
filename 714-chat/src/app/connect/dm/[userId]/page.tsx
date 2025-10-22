@@ -135,7 +135,9 @@ useEffect(() => {
     if (!currentUser) return;
 
     // fetch messages & Reply preview
-const { data: msgs } = await supabase
+if (!currentUser?.id || !userId) return;
+
+const { data: msgs, error } = await supabase
   .from("direct_messages")
   .select(`
     *,
@@ -143,10 +145,12 @@ const { data: msgs } = await supabase
       id, content, type, sender_id
     )
   `)
-  .or(
-    `and(sender_id.eq.${currentUser.id},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${currentUser.id})`
-  )
+  .or(`(sender_id.eq.${currentUser.id},receiver_id.eq.${userId}), (sender_id.eq.${userId},receiver_id.eq.${currentUser.id})`)
   .order("created_at", { ascending: true });
+
+if (error) {
+  console.error("❌ Message load error:", error.message);
+}
 
 
     // Fetch reactions
