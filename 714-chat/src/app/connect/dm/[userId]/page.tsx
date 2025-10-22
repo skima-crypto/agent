@@ -144,17 +144,26 @@ useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // ✅ Send message
-  const sendMessage = async (type = "text", content = newMessage) => {
-    if (!content.trim()) return;
-   const { error } = await supabase.from("direct_messages").insert({
-      sender_id: currentUser.id,
-      receiver_id: userId,
-      content,
-      type,
-    });
-    if (!error) setNewMessage("");
-  };
+// ✅ Send message
+const sendMessage = async (type = "text", content = newMessage) => {
+  if (!content.trim()) return;
+
+  const { error } = await supabase.from("direct_messages").insert({
+    sender_id: currentUser.id,
+    receiver_id: userId,
+    type,
+    content: type === "text" ? content : null,
+    image_url: type === "image" || type === "video" ? content : null,
+    audio_url: type === "audio" ? content : null,
+  });
+
+  if (error) {
+    console.error("Send error:", error.message);
+  } else {
+    setNewMessage("");
+  }
+};
+
 
   // ✅ Upload file/video/image
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -301,36 +310,39 @@ useEffect(() => {
             }`}
           >
             {msg.type === "text" && (
-              <div
-                className={`max-w-xs px-4 py-2 rounded-2xl ${
-                  msg.sender_id === currentUser?.id
-                    ? "bg-blue-600 text-white"
-                    : "bg-blue-950/50"
-                }`}
-              >
-                {msg.content}
-              </div>
-            )}
-            {msg.type === "image" && (
-              <Image
-                src={msg.content}
-                alt="image"
-                width={200}
-                height={200}
-                className="rounded-xl cursor-pointer"
-                onClick={() => setShowImage(msg.content)}
-              />
-            )}
-            {msg.type === "video" && (
-              <video
-                src={msg.content}
-                controls
-                className="rounded-xl max-w-xs"
-              />
-            )}
-            {msg.type === "audio" && (
-              <audio controls src={msg.content} className="rounded-md" />
-            )}
+  <div
+    className={`max-w-xs px-4 py-2 rounded-2xl ${
+      msg.sender_id === currentUser?.id
+        ? "bg-blue-600 text-white"
+        : "bg-blue-950/50"
+    }`}
+  >
+    {msg.content}
+  </div>
+)}
+
+{msg.type === "image" && msg.image_url && (
+  <Image
+    src={msg.image_url}
+    alt="image"
+    width={200}
+    height={200}
+    className="rounded-xl cursor-pointer"
+    onClick={() => setShowImage(msg.image_url)}
+  />
+)}
+
+{msg.type === "video" && msg.image_url && (
+  <video
+    src={msg.image_url}
+    controls
+    className="rounded-xl max-w-xs"
+  />
+)}
+
+{msg.type === "audio" && msg.audio_url && (
+  <audio controls src={msg.audio_url} className="rounded-md" />
+)}
 
             {msg.reactions && (
               <div className="flex gap-1 mt-1 text-lg">
