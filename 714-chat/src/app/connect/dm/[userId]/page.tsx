@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import Image from "next/image";
@@ -19,6 +19,7 @@ import dynamic from "next/dynamic";
 
 import ProfileModal from "@/components/ProfileModal";
 import ImageViewerModal from "@/components/ImageViewerModal";
+import VideoViewerModal from "@/components/VideoViewerModal";
 import MessageActionsPopup from "@/components/MessageActionsPopup";
 import VoiceRecorder from "@/components/VoiceRecorder";
 
@@ -39,6 +40,33 @@ const timeAgo = (timestamp: string) => {
   return `${Math.floor(diff / 31536000)}y ago`;
 };
 
+// Regex to detect URLs (simple, robust enough for messages)
+const urlRegex = /((https?:\/\/|www\.)[^\s/$.?#].[^\s]*)/gi;
+
+// Renders message text, converting urls to clickable links
+const renderMessageContent = (text: string) => {
+  if (!text) return null;
+  const parts = text.split(urlRegex).filter(Boolean);
+  return parts.map((part, idx) => {
+    if (part.match(urlRegex)) {
+      const href = part.startsWith("http") ? part : `https://${part}`;
+      return (
+        <a
+          key={idx}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline break-words"
+        >
+          {part}
+        </a>
+      );
+    } else {
+      return <span key={idx}>{part}</span>;
+    }
+  });
+};
+
 export default function DMPage() {
   const router = useRouter();
   const { userId } = useParams<{ userId: string }>();
@@ -49,6 +77,7 @@ export default function DMPage() {
   const [friend, setFriend] = useState<any>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showImage, setShowImage] = useState<string | null>(null);
+  const [showVideo, setShowVideo] = useState<string | null>(null);
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [searchMode, setSearchMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -60,6 +89,8 @@ export default function DMPage() {
   }>({ visible: false, x: 0, y: 0 });
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
   // ✅ Session check & load user + friend
   useEffect(() => {
@@ -105,65 +136,63 @@ export default function DMPage() {
     loadMessages();
   }, [currentUser, userId]);
 
-// ✅ Subscribe realtime for direct messages
-useEffect(() => {
-  if (!currentUser) return;
+  // ✅ Subscribe realtime for direct messages
+  useEffect(() => {
+    if (!currentUser) return;
 
-  const channel = supabase
-    .channel("direct_messages") // channel name can match the table name
-    .on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "direct_messages",
-      },
-      (payload) => {
-        const msg = payload.new as any;
+    const channel = supabase
+      .channel("direct_messages") // channel name can match the table name
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "direct_messages",
+        },
+        (payload) => {
+          const msg = payload.new as any;
 
-        // Only push messages related to this chat
-        if (
-          (msg.sender_id === userId && msg.receiver_id === currentUser.id) ||
-          (msg.sender_id === currentUser.id && msg.receiver_id === userId)
-        ) {
-          setMessages((prev) => [...prev, msg]);
+          // Only push messages related to this chat
+          if (
+            (msg.sender_id === userId && msg.receiver_id === currentUser.id) ||
+            (msg.sender_id === currentUser.id && msg.receiver_id === userId)
+          ) {
+            setMessages((prev) => [...prev, msg]);
+          }
         }
-      }
-    )
-    .subscribe();
+      )
+      .subscribe();
 
-  // Cleanup on unmount
-  return () => {
-    supabase.removeChannel(channel);
-  };
-}, [currentUser, userId]);
-
+    // Cleanup on unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser, userId]);
 
   // ✅ Auto scroll to bottom
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-// ✅ Send message
-const sendMessage = async (type = "text", content = newMessage) => {
-  if (!content.trim()) return;
+  // ✅ Send message
+  const sendMessage = async (type = "text", content = newMessage) => {
+    if (type === "text" && !content.trim()) return;
 
-  const { error } = await supabase.from("direct_messages").insert({
-    sender_id: currentUser.id,
-    receiver_id: userId,
-    type,
-    content: type === "text" ? content : null,
-    image_url: type === "image" || type === "video" ? content : null,
-    audio_url: type === "audio" ? content : null,
-  });
+    const { error } = await supabase.from("direct_messages").insert({
+      sender_id: currentUser.id,
+      receiver_id: userId,
+      type,
+      content: type === "text" ? content : null,
+      image_url: type === "image" || type === "video" ? content : null,
+      audio_url: type === "audio" ? content : null,
+    });
 
-  if (error) {
-    console.error("Send error:", error.message);
-  } else {
-    setNewMessage("");
-  }
-};
-
+    if (error) {
+      console.error("Send error:", error.message);
+    } else {
+      setNewMessage("");
+    }
+  };
 
   // ✅ Upload file/video/image
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -183,9 +212,11 @@ const sendMessage = async (type = "text", content = newMessage) => {
       .getPublicUrl(data.path);
 
     await sendMessage(file.type.startsWith("video") ? "video" : "image", publicUrl.publicUrl);
+    // reset input
+    if (e.target) e.target.value = "";
   };
 
-  // ✅ Voice message upload
+  // ✅ Voice message upload (called by VoiceRecorder)
   const handleVoiceUpload = async (file: File) => {
     const path = `${currentUser.id}/${Date.now()}.webm`;
     const { data, error } = await supabase.storage
@@ -198,22 +229,10 @@ const sendMessage = async (type = "text", content = newMessage) => {
     await sendMessage("audio", publicUrl.publicUrl);
   };
 
-  // ✅ Camera capture
-  const handleCameraCapture = async () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*,video/*";
-    (input as any).capture = "environment";
-    input.onchange = (event: Event) => {
-  const target = event.target as HTMLInputElement;
-  if (target?.files?.[0]) {
-    handleFileUpload({
-      target,
-    } as unknown as React.ChangeEvent<HTMLInputElement>);
-  }
-};
-
-    input.click();
+  // ✅ Camera capture using input capture (works well on mobile)
+  const handleCameraCaptureClick = () => {
+    // trigger hidden input that has capture="environment"
+    cameraInputRef.current?.click();
   };
 
   // ✅ Reaction & reply actions
@@ -235,9 +254,16 @@ const sendMessage = async (type = "text", content = newMessage) => {
 
   const filteredMessages = searchMode
     ? messages.filter((m) =>
-        m.content.toLowerCase().includes(searchQuery.toLowerCase())
+        (m.content || "")
+          .toString()
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase())
       )
     : messages;
+
+  // convenience to get avatar for a message sender (only two participants)
+  const avatarFor = (senderId: string) =>
+    senderId === currentUser?.id ? currentUser?.avatar_url : friend?.avatar_url;
 
   return (
     <div
@@ -299,116 +325,183 @@ const sendMessage = async (type = "text", content = newMessage) => {
 
       {/* MESSAGES */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-        {filteredMessages.map((msg) => (
-          <motion.div
-            key={msg.id}
-            onContextMenu={(e) => handleMessageClick(e, msg.id)}
-            className={`flex flex-col ${
-              msg.sender_id === currentUser?.id
-                ? "items-end"
-                : "items-start"
-            }`}
-          >
-            {msg.type === "text" && (
-  <div
-    className={`max-w-xs px-4 py-2 rounded-2xl ${
-      msg.sender_id === currentUser?.id
-        ? "bg-blue-600 text-white"
-        : "bg-blue-950/50"
-    }`}
-  >
-    {msg.content}
-  </div>
-)}
+        {filteredMessages.map((msg) => {
+          const isMe = msg.sender_id === currentUser?.id;
+          return (
+            <motion.div
+              key={msg.id}
+              onContextMenu={(e) => handleMessageClick(e, msg.id)}
+              className={`flex items-start gap-3 ${
+                isMe ? "justify-end" : "justify-start"
+              }`}
+            >
+              {/* avatar left for friend, right for me - visible to everyone */}
+              {!isMe && (
+                <div className="w-10 h-10 shrink-0">
+                  <Image
+                    src={avatarFor(msg.sender_id) || "/default-avatar.png"}
+                    alt="avatar"
+                    width={40}
+                    height={40}
+                    className="rounded-full object-cover"
+                  />
+                </div>
+              )}
 
-{msg.type === "image" && msg.image_url && (
-  <Image
-    src={msg.image_url}
-    alt="image"
-    width={200}
-    height={200}
-    className="rounded-xl cursor-pointer"
-    onClick={() => setShowImage(msg.image_url)}
-  />
-)}
+              {/* message bubble */}
+              <div className={`flex flex-col max-w-[70%]`}>
+                {msg.type === "text" && (
+                  <div
+                    className={`px-4 py-2 rounded-2xl break-words ${
+                      isMe ? "bg-blue-600 text-white self-end" : "bg-blue-950/50"
+                    }`}
+                  >
+                    {renderMessageContent(msg.content)}
+                  </div>
+                )}
 
-{msg.type === "video" && msg.image_url && (
-  <video
-    src={msg.image_url}
-    controls
-    className="rounded-xl max-w-xs"
-  />
-)}
+                {msg.type === "image" && msg.image_url && (
+                  <div className="rounded-xl overflow-hidden">
+                    <Image
+                      src={msg.image_url}
+                      alt="image"
+                      width={300}
+                      height={300}
+                      className="rounded-xl cursor-pointer object-cover"
+                      onClick={() => setShowImage(msg.image_url)}
+                    />
+                  </div>
+                )}
 
-{msg.type === "audio" && msg.audio_url && (
-  <audio controls src={msg.audio_url} className="rounded-md" />
-)}
+                {msg.type === "video" && msg.image_url && (
+                  <div className="rounded-xl overflow-hidden cursor-pointer">
+                    {/* show a small inline video preview; click to open modal */}
+                    <video
+                      src={msg.image_url}
+                      className="rounded-xl max-w-full"
+                      onClick={() => setShowVideo(msg.image_url)}
+                      controls={false}
+                      muted
+                      playsInline
+                    />
+                    <div className="mt-2 text-xs opacity-60">{/* optional caption */}</div>
+                  </div>
+                )}
 
-            {msg.reactions && (
-              <div className="flex gap-1 mt-1 text-lg">
-                {msg.reactions.map((r: string, i: number) => (
-                  <span key={i}>{r}</span>
-                ))}
+                {msg.type === "audio" && msg.audio_url && (
+                  <audio controls src={msg.audio_url} className="rounded-md mt-1" />
+                )}
+
+                {msg.reactions && (
+                  <div className="flex gap-1 mt-1 text-lg">
+                    {msg.reactions.map((r: string, i: number) => (
+                      <span key={i}>{r}</span>
+                    ))}
+                  </div>
+                )}
+
+                <span className="text-xs opacity-60 mt-1">{timeAgo(msg.created_at)}</span>
               </div>
-            )}
 
-            <span className="text-xs opacity-60 mt-1">
-              {timeAgo(msg.created_at)}
-            </span>
-          </motion.div>
-        ))}
+              {/* avatar right for me */}
+              {isMe && (
+                <div className="w-10 h-10 shrink-0">
+                  <Image
+                    src={avatarFor(msg.sender_id) || "/default-avatar.png"}
+                    alt="avatar"
+                    width={40}
+                    height={40}
+                    className="rounded-full object-cover"
+                  />
+                </div>
+              )}
+            </motion.div>
+          );
+        })}
         <div ref={bottomRef} />
       </div>
 
-      {/* INPUT AREA */}
-      <div className="flex items-center gap-2 p-3 border-t border-blue-700/30">
-        <button onClick={handleCameraCapture}>
-          <Camera className="text-blue-400" />
-        </button>
+      {/* INPUT AREA (unified bubble) */}
+      <div className="p-3 border-t border-blue-700/30">
+        <div className="flex items-center gap-2 w-full">
+          <div className="flex items-center gap-2 flex-1 bg-blue-950/20 border border-blue-700/40 rounded-full px-3 py-2">
+            {/* camera (hidden input with capture) */}
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*,video/*"
+              capture="environment"
+              onChange={handleFileUpload}
+              className="hidden"
+              id="cameraCapture"
+            />
+            <button
+              type="button"
+              onClick={handleCameraCaptureClick}
+              aria-label="Open camera"
+              className="p-2 rounded-full hover:bg-blue-900/40"
+            >
+              <Camera className="text-blue-300" />
+            </button>
 
-        <input
-          type="file"
-          accept="image/*,video/*"
-          onChange={handleFileUpload}
-          className="hidden"
-          id="fileUpload"
-        />
-        <label htmlFor="fileUpload">
-          <Paperclip className="text-blue-400 cursor-pointer" />
-        </label>
+            {/* attachment input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,video/*,audio/*"
+              onChange={handleFileUpload}
+              className="hidden"
+              id="fileUpload"
+            />
+            <label htmlFor="fileUpload" className="p-2 rounded-full hover:bg-blue-900/40 cursor-pointer">
+              <Paperclip className="text-blue-300" />
+            </label>
 
-        <VoiceRecorder onRecorded={handleVoiceUpload} />
+            {/* mic recorder */}
+            <VoiceRecorder onRecorded={handleVoiceUpload} />
 
-        <input
-          type="text"
-          placeholder="Type a message..."
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          className="flex-1 rounded-full px-4 py-2 text-sm bg-blue-950/30 border border-blue-700/30 focus:ring focus:ring-blue-600"
-        />
-        <button
-          onClick={() => sendMessage()}
-          className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full"
-        >
-          <Send size={18} />
-        </button>
+            {/* message text field (grows) */}
+            <input
+              type="text"
+              placeholder="Type a message..."
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  sendMessage();
+                }
+              }}
+              className="flex-1 bg-transparent outline-none px-3 text-sm"
+            />
+
+            {/* send button */}
+            <button
+              onClick={() => {
+                sendMessage();
+              }}
+              className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full"
+              aria-label="Send"
+            >
+              <Send size={18} />
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* PROFILE MODAL */}
-     {showProfile && (
-  <ProfileModal
-    userId={friend?.id || null}
-    onClose={() => setShowProfile(false)}
-  />
-)}
-
+      {showProfile && (
+        <ProfileModal userId={friend?.id || null} onClose={() => setShowProfile(false)} />
+      )}
 
       {/* IMAGE VIEWER */}
       {showImage && (
-        <ImageViewerModal
-          imageUrl={showImage}
-          onClose={() => setShowImage(null)}
-        />
+        <ImageViewerModal imageUrl={showImage} onClose={() => setShowImage(null)} />
+      )}
+
+      {/* VIDEO VIEWER */}
+      {showVideo && (
+        <VideoViewerModal videoUrl={showVideo} onClose={() => setShowVideo(null)} />
       )}
 
       {/* MESSAGE ACTIONS */}

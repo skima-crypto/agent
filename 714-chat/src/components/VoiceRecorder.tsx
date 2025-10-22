@@ -1,62 +1,107 @@
-"use client";
+import React, { useEffect, useRef, useState } from "react";
+import { Mic, Send } from "lucide-react";
 
-import { useState, useRef, useEffect } from "react";
-import { Mic, Square, Send } from "lucide-react";
-
-interface VoiceRecorderProps {
+type Props = {
   onRecorded: (file: File) => void;
-}
+};
 
-export default function VoiceRecorder({ onRecorded }: VoiceRecorderProps) {
+export default function VoiceRecorder({ onRecorded }: Props) {
   const [recording, setRecording] = useState(false);
-  const [audioURL, setAudioURL] = useState<string | null>(null);
-  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
-  const chunks = useRef<Blob[]>([]);
+  const [supported, setSupported] = useState(true);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
-    if (recording) {
-      navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
-        const recorder = new MediaRecorder(stream);
-        recorder.ondataavailable = (e) => chunks.current.push(e.data);
-        recorder.onstop = () => {
-          const blob = new Blob(chunks.current, { type: "audio/webm" });
-          chunks.current = [];
-          const url = URL.createObjectURL(blob);
-          setAudioURL(url);
-          const file = new File([blob], "voice-message.webm", { type: "audio/webm" });
-          onRecorded(file);
-        };
-        recorder.start();
-        setMediaRecorder(recorder);
-      });
-    } else {
-      mediaRecorder?.stop();
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setSupported(false);
     }
+    // cleanup on unmount
     return () => {
-      mediaRecorder?.stream.getTracks().forEach((t) => t.stop());
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+      }
     };
-  }, [recording]);
+  }, []);
+
+  const startRecording = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setSupported(false);
+      alert("Recording not supported in this browser.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const options: MediaRecorderOptions = { mimeType: "audio/webm" };
+      const mediaRecorder = new MediaRecorder(stream, options);
+      chunksRef.current = [];
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          chunksRef.current.push(e.data);
+        }
+      };
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+        const file = new File([blob], `${Date.now()}.webm`, { type: "audio/webm" });
+        onRecorded(file);
+        // stop tracks
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((t) => t.stop());
+          streamRef.current = null;
+        }
+        mediaRecorderRef.current = null;
+        setRecording(false);
+      };
+      mediaRecorder.start();
+      mediaRecorderRef.current = mediaRecorder;
+      setRecording(true);
+    } catch (err: any) {
+      console.error("Microphone permission denied or error:", err);
+      alert("Microphone access was denied. Please allow microphone permissions and try again.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    } else {
+      setRecording(false);
+    }
+  };
+
+  if (!supported) {
+    return (
+      <div className="p-2 rounded-full">
+        <Mic className="text-gray-400" />
+      </div>
+    );
+  }
 
   return (
-    <div className="flex items-center space-x-2">
+    <div>
       {!recording ? (
         <button
-          onClick={() => setRecording(true)}
-          className="p-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition"
+          type="button"
+          onClick={startRecording}
+          className="p-2 rounded-full hover:bg-blue-900/40"
+          aria-label="Start recording"
         >
-          <Mic className="w-5 h-5" />
+          <Mic className="text-blue-300" />
         </button>
       ) : (
         <button
-          onClick={() => setRecording(false)}
-          className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition"
+          type="button"
+          onClick={stopRecording}
+          className="p-2 rounded-full bg-red-600 hover:bg-red-700 text-white"
+          aria-label="Stop recording"
         >
-          <Square className="w-5 h-5" />
+          Stop
         </button>
-      )}
-
-      {audioURL && (
-        <audio controls src={audioURL} className="rounded-md" preload="metadata" />
       )}
     </div>
   );
