@@ -179,7 +179,8 @@ export default function ConnectPage() {
                     key={user.id}
                     whileHover={{ scale: 1.02 }}
                     className="flex items-center justify-between bg-blue-950/40 border border-blue-700/40 rounded-xl p-4 hover:bg-blue-800/40 transition cursor-pointer"
-                    onClick={() => handleOpenChat(user.id)}
+                    onClick={() => handleOpenChat(user.username)}
+
                   >
                     <div className="flex items-center gap-3">
                       <Image
@@ -218,7 +219,8 @@ export default function ConnectPage() {
                 <motion.div
                   key={chat.id}
                   whileHover={{ scale: 1.02 }}
-                  onClick={() => handleOpenChat(chat.friend.id)}
+                  onClick={() => handleOpenChat(chat.friend.username)}
+
                   className="flex items-center justify-between bg-blue-950/40 border border-blue-700/40 rounded-xl p-4 hover:bg-blue-800/40 transition cursor-pointer"
                 >
                   <div className="flex items-center gap-4">
