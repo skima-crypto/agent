@@ -136,40 +136,40 @@ useEffect(() => {
   if (!currentUser || !friend) return;
 
   const loadMessages = async () => {
-    const { data: msgs, error } = await supabase
-      .from("direct_messages")
-      .select(`
-        *,
-        reply_to_message:direct_messages!direct_messages_reply_to_fkey (
-          id, content, type, sender_id
+    try {
+      console.log("[DM] loading messages for", currentUser.id, friend.id);
+
+      const { data: msgs, error } = await supabase
+        .from("direct_messages")
+        .select(`
+          *,
+          reply_to_message:direct_messages!direct_messages_reply_to_fkey (
+            id, content, type, sender_id
+          )
+        `)
+        .or(
+          `and(sender_id.eq.${currentUser.id},receiver_id.eq.${friend.id}),and(sender_id.eq.${friend.id},receiver_id.eq.${currentUser.id})`
         )
-      `)
-      .or(
-        `and(sender_id.eq.${currentUser.id},receiver_id.eq.${friend.id}),
-         and(sender_id.eq.${friend.id},receiver_id.eq.${currentUser.id})`
-      )
-      .order("created_at", { ascending: true });
+        .order("created_at", { ascending: true });
 
-    if (error) {
-      console.error("❌ Message load error:", error.message);
-      return;
+      if (error) {
+        console.error("[DM] loadMessages error:", error);
+        // If you suspect RLS, print a hint:
+        if (error.details || error.hint) {
+          console.error("[DM] details:", error.details, "hint:", error.hint);
+        }
+        return;
+      }
+
+      console.log("[DM] fetched messages:", Array.isArray(msgs) ? msgs.length : 0);
+
+      // Normalise messages and ensure reactions array exists
+      const normalized = (msgs || []).map((m: any) => ({ ...m, reactions: m.reactions || [] }));
+
+      setMessages(normalized);
+    } catch (err) {
+      console.error("[DM] unexpected load error:", err);
     }
-
-    // ✅ Fetch reactions after messages
-    const { data: reactions } = await supabase
-      .from("direct_message_reactions")
-      .select("*");
-
-    // ✅ Merge reactions into messages
-    const merged = (msgs || []).map((m: any) => ({
-      ...m,
-      reactions:
-        reactions
-          ?.filter((r) => r.message_id === m.id)
-          .map((r) => r.emoji) || [],
-    }));
-
-    setMessages(merged);
   };
 
   loadMessages();
@@ -179,27 +179,50 @@ useEffect(() => {
 useEffect(() => {
   if (!currentUser?.id || !friend?.id) return;
 
+  const channelName = `dm-${[currentUser.id, friend.id].sort().join("-")}`; // stable channel name
+  const filter = `or(
+    and(sender_id.eq.${currentUser.id},receiver_id.eq.${friend.id}),
+    and(sender_id.eq.${friend.id},receiver_id.eq.${currentUser.id})
+  )`;
+
   const channel = supabase
-    .channel(`dm-${currentUser.id}-${friend.id}`)
+    .channel(channelName)
     .on(
       "postgres_changes",
       {
         event: "INSERT",
         schema: "public",
         table: "direct_messages",
-        filter: `or(
-          and(sender_id.eq.${currentUser.id},receiver_id.eq.${friend.id}),
-          and(sender_id.eq.${friend.id},receiver_id.eq.${currentUser.id})
-        )`,
+        filter,
       },
       (payload) => {
         const msg = payload.new as any;
-        setMessages((prev) => [...prev, msg]);
+        console.log("[DM realtime] INSERT received:", msg.id);
+
+        // Avoid duplicates if message already exists (optimistic insert)
+        setMessages((prev) => {
+          if (prev.some((p) => p.id === msg.id)) return prev;
+          return [...prev, { ...msg, reactions: msg.reactions || [] }];
+        });
+      }
+    )
+    // also listen for updates (e.g. reactions, edits)
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "direct_messages",
+        filter,
+      },
+      (payload) => {
+        const updated = payload.new as any;
+        console.log("[DM realtime] UPDATE received:", updated.id);
+        setMessages((prev) => prev.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)));
       }
     )
     .subscribe();
 
-  // ✅ Cleanup safely (no Promise returned)
   return () => {
     supabase.removeChannel(channel);
   };
