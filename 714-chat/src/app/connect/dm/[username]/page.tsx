@@ -130,39 +130,39 @@ export default function DMPage() {
     loadUser();
   }, [username]);
 
-  // ✅ Load messages + reactions together
+ // ✅ Load messages + reactions together
 useEffect(() => {
   const loadMessages = async () => {
-    if (!currentUser) return;
+    // ✅ ensure both IDs exist before running query
+    if (!currentUser?.id || !friend?.id) return;
 
-    // fetch messages & Reply preview
-if (!currentUser?.id || !username) return;
+    // ✅ fetch messages & reply previews
+    const { data: msgs, error } = await supabase
+      .from("direct_messages")
+      .select(`
+        *,
+        reply_to_message:direct_messages!direct_messages_reply_to_fkey (
+          id, content, type, sender_id
+        )
+      `)
+      .or(
+        `and(sender_id.eq.${currentUser.id},receiver_id.eq.${friend.id}),
+         and(sender_id.eq.${friend.id},receiver_id.eq.${currentUser.id})`
+      )
+      .order("created_at", { ascending: true });
 
-const { data: msgs, error } = await supabase
-  .from("direct_messages")
-  .select(`
-    *,
-    reply_to_message:direct_messages!direct_messages_reply_to_fkey (
-      id, content, type, sender_id
-    )
-  `)
-  .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${friend?.id}),and(sender_id.eq.${friend?.id},receiver_id.eq.${currentUser.id})`)
+    if (error) {
+      console.error("❌ Message load error:", error.message);
+      return;
+    }
 
-
-  .order("created_at", { ascending: true });
-
-if (error) {
-  console.error("❌ Message load error:", error.message);
-}
-
-
-    // Fetch reactions
+    // ✅ fetch reactions
     const { data: reactions } = await supabase
       .from("direct_message_reactions")
       .select("*");
 
-    // Merge reactions into each message
-    const merged = (msgs || []).map((m) => ({
+    // ✅ merge reactions into each message
+    const merged = (msgs || []).map((m: any) => ({
       ...m,
       reactions:
         reactions
@@ -173,48 +173,40 @@ if (error) {
     setMessages(merged);
   };
 
-  loadMessages();
-  if (!currentUser) return;
-  if (!friend?.id) return;
+  // ✅ run only when both users exist
+  if (currentUser?.id && friend?.id) loadMessages();
 }, [currentUser?.id, friend?.id]);
 
 
 
-
   // ✅ Subscribe realtime for direct messages
-  useEffect(() => {
-    if (!currentUser) return;
+useEffect(() => {
+  // ✅ wait for both users to exist before subscribing
+  if (!currentUser?.id || !friend?.id) return;
 
-    const channel = supabase
-      .channel("direct_messages") // channel name can match the table name
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "direct_messages",
-        },
-        (payload) => {
-          const msg = payload.new as any;
+  const channel = supabase
+    .channel("direct_messages")
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "direct_messages" },
+      (payload) => {
+        const msg = payload.new as any;
 
-          // Only push messages related to this chat
-          if (
-  (msg.sender_id === friend?.id && msg.receiver_id === currentUser.id) ||
-  (msg.sender_id === currentUser.id && msg.receiver_id === friend?.id)
-) {
-  setMessages((prev) => [...prev, msg]);
-}
-
+        // ✅ both ids safe to use
+        if (
+          (msg.sender_id === friend.id && msg.receiver_id === currentUser.id) ||
+          (msg.sender_id === currentUser.id && msg.receiver_id === friend.id)
+        ) {
+          setMessages((prev) => [...prev, msg]);
         }
-      )
-      .subscribe();
+      }
+    )
+    .subscribe();
 
-
-    // Cleanup on unmount
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [currentUser?.id, friend?.id]);
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, [currentUser?.id, friend?.id]);
 
 
 
@@ -252,26 +244,32 @@ useEffect(() => {
   }, [messages]);
 
   // ✅ Send message
-  const sendMessage = async (type = "text", content = newMessage) => {
+const sendMessage = async (type = "text", content = newMessage) => {
   if (type === "text" && !content.trim()) return;
 
-  const { error } = await supabase.from("direct_messages").insert({
-    sender_id: currentUser.id,
-    receiver_id: friend?.id,
-    type,
-    content: type === "text" ? content : null,
-    image_url: type === "image" || type === "video" ? content : null,
-    audio_url: type === "audio" ? content : null,
-    reply_to: replyTo?.id || null, // 🆕 add this column if you want replies stored
-  });
+  const { data: inserted, error } = await supabase
+    .from("direct_messages")
+    .insert({
+      sender_id: currentUser.id,
+      receiver_id: friend.id, // ✅ guaranteed defined now
+      type,
+      content: type === "text" ? content : null,
+      image_url: type === "image" || type === "video" ? content : null,
+      audio_url: type === "audio" ? content : null,
+      reply_to: replyTo?.id || null,
+    })
+    .select()
+    .single(); // ✅ return inserted message
 
   if (error) {
     console.error("Send error:", error.message);
-  } else {
+  } else if (inserted) {
+    setMessages((prev) => [...prev, inserted]); // ✅ instant UI update
     setNewMessage("");
-    setReplyTo(null); // clear reply after send
+    setReplyTo(null);
   }
 };
+
 
 
   // ✅ Upload file/video/image
