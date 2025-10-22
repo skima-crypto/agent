@@ -146,10 +146,8 @@ useEffect(() => {
           id, content, type, sender_id
         )
       `)
-      .or(
-        `and(sender_id.eq.${currentUser.id},receiver_id.eq.${friend.id}),
-         and(sender_id.eq.${friend.id},receiver_id.eq.${currentUser.id})`
-      )
+      .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${friend.id}),and(sender_id.eq.${friend.id},receiver_id.eq.${currentUser.id})`)
+
       .order("created_at", { ascending: true });
 
     if (error) {
@@ -180,10 +178,8 @@ useEffect(() => {
         event: "*",
         schema: "public",
         table: "direct_messages",
-        filter: `or(
-          and(sender_id.eq.${currentUser.id},receiver_id.eq.${friend.id}),
-          and(sender_id.eq.${friend.id},receiver_id.eq.${currentUser.id})
-        )`,
+        filter: `or(and(sender_id.eq.${currentUser.id},receiver_id.eq.${friend.id}),and(sender_id.eq.${friend.id},receiver_id.eq.${currentUser.id}))`,
+
       },
       (payload) => {
         const msg = payload.new as any;
