@@ -493,6 +493,22 @@ useEffect(() => {
         <div ref={bottomRef} />
       </div>
 
+      {/* ✅ Reply Preview Bar */}
+{replyTo && (
+  <div className="p-2 bg-blue-900/40 text-sm border-l-4 border-blue-400 mb-1 rounded-md flex justify-between items-center mx-3">
+    <span className="truncate">
+      Replying to: {replyTo.content || replyTo.type}
+    </span>
+    <button
+      onClick={() => setReplyTo(null)}
+      className="text-xs text-blue-300 hover:underline"
+    >
+      cancel
+    </button>
+  </div>
+)}
+
+
       {/* INPUT AREA (unified bubble) */}
       <div className="p-3 border-t border-blue-700/30">
         <div className="flex items-center gap-2 w-full">
