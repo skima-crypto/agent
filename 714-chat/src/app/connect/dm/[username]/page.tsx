@@ -174,7 +174,10 @@ if (error) {
   };
 
   loadMessages();
-}, [currentUser, friend]);
+  if (!currentUser) return;
+  if (!friend?.id) return;
+}, [currentUser?.id, friend?.id]);
+
 
 
 
@@ -211,7 +214,8 @@ if (error) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentUser, friend]);
+  }, [currentUser?.id, friend?.id]);
+
 
 
 
