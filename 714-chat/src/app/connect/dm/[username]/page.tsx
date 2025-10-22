@@ -130,13 +130,12 @@ export default function DMPage() {
     loadUser();
   }, [username]);
 
- // ✅ Load messages + reactions together
-useEffect(() => {
-  const loadMessages = async () => {
-    // ✅ ensure both IDs exist before running query
-    if (!currentUser?.id || !friend?.id) return;
 
-    // ✅ fetch messages & reply previews
+// ✅ Load messages + reactions together (more reliable trigger)
+useEffect(() => {
+  if (!currentUser || !friend) return;
+
+  const loadMessages = async () => {
     const { data: msgs, error } = await supabase
       .from("direct_messages")
       .select(`
@@ -156,12 +155,12 @@ useEffect(() => {
       return;
     }
 
-    // ✅ fetch reactions
+    // ✅ Fetch reactions after messages
     const { data: reactions } = await supabase
       .from("direct_message_reactions")
       .select("*");
 
-    // ✅ merge reactions into each message
+    // ✅ Merge reactions into messages
     const merged = (msgs || []).map((m: any) => ({
       ...m,
       reactions:
@@ -173,41 +172,38 @@ useEffect(() => {
     setMessages(merged);
   };
 
-  // ✅ run only when both users exist
-  if (currentUser?.id && friend?.id) loadMessages();
-}, [currentUser?.id, friend?.id]);
+  loadMessages();
+}, [currentUser, friend]);
 
-
-
-  // ✅ Subscribe realtime for direct messages
+// ✅ Subscribe realtime for direct messages
 useEffect(() => {
-  // ✅ wait for both users to exist before subscribing
   if (!currentUser?.id || !friend?.id) return;
 
   const channel = supabase
-    .channel("direct_messages")
+    .channel(`dm-${currentUser.id}-${friend.id}`)
     .on(
       "postgres_changes",
-      { event: "INSERT", schema: "public", table: "direct_messages" },
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "direct_messages",
+        filter: `or(
+          and(sender_id.eq.${currentUser.id},receiver_id.eq.${friend.id}),
+          and(sender_id.eq.${friend.id},receiver_id.eq.${currentUser.id})
+        )`,
+      },
       (payload) => {
         const msg = payload.new as any;
-
-        // ✅ both ids safe to use
-        if (
-          (msg.sender_id === friend.id && msg.receiver_id === currentUser.id) ||
-          (msg.sender_id === currentUser.id && msg.receiver_id === friend.id)
-        ) {
-          setMessages((prev) => [...prev, msg]);
-        }
+        setMessages((prev) => [...prev, msg]);
       }
     )
     .subscribe();
 
+  // ✅ Cleanup safely (no Promise returned)
   return () => {
     supabase.removeChannel(channel);
   };
 }, [currentUser?.id, friend?.id]);
-
 
 
 
