@@ -134,14 +134,20 @@ useEffect(() => {
   const loadMessages = async () => {
     if (!currentUser) return;
 
-    // Fetch messages
-    const { data: msgs } = await supabase
-      .from("direct_messages")
-      .select("*")
-      .or(
-        `and(sender_id.eq.${currentUser.id},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${currentUser.id})`
-      )
-      .order("created_at", { ascending: true });
+    // fetch messages & Reply preview
+const { data: msgs } = await supabase
+  .from("direct_messages")
+  .select(`
+    *,
+    reply_to_message:direct_messages!direct_messages_reply_to_fkey (
+      id, content, type, sender_id
+    )
+  `)
+  .or(
+    `and(sender_id.eq.${currentUser.id},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${currentUser.id})`
+  )
+  .order("created_at", { ascending: true });
+
 
     // Fetch reactions
     const { data: reactions } = await supabase
@@ -403,103 +409,138 @@ useEffect(() => {
         </div>
       )}
 
-      {/* MESSAGES */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-        {filteredMessages.map((msg) => {
-          const isMe = msg.sender_id === currentUser?.id;
-          return (
-            <motion.div
-              key={msg.id}
-              onContextMenu={(e) => handleMessageClick(e, msg.id)}
-              className={`flex items-start gap-3 ${
-                isMe ? "justify-end" : "justify-start"
+     {/* MESSAGES */}
+<div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+  {filteredMessages.map((msg) => {
+    const isMe = msg.sender_id === currentUser?.id;
+    const repliedMsg = msg.reply_to_message; // 🆕 the message being replied to
+
+    return (
+      <motion.div
+        key={msg.id}
+        onContextMenu={(e) => handleMessageClick(e, msg.id)}
+        className={`flex items-start gap-3 ${
+          isMe ? "justify-end" : "justify-start"
+        }`}
+      >
+        {/* avatar left for friend, right for me */}
+        {!isMe && (
+          <div className="w-10 h-10 shrink-0">
+            <Image
+              src={avatarFor(msg.sender_id) || "/default-avatar.png"}
+              alt="avatar"
+              width={40}
+              height={40}
+              className="rounded-full object-cover"
+            />
+          </div>
+        )}
+
+        {/* message bubble */}
+        <div className={`flex flex-col max-w-[70%]`}>
+          
+          {/* 🧩 REPLY PREVIEW (if this message replies to another) */}
+          {repliedMsg && (
+            <div
+              className={`text-xs p-2 mb-1 rounded-lg border-l-4 ${
+                isMe
+                  ? "border-blue-300 bg-blue-700/30 text-blue-100"
+                  : "border-blue-500 bg-blue-950/40 text-blue-200"
               }`}
             >
-              {/* avatar left for friend, right for me - visible to everyone */}
-              {!isMe && (
-                <div className="w-10 h-10 shrink-0">
-                  <Image
-                    src={avatarFor(msg.sender_id) || "/default-avatar.png"}
-                    alt="avatar"
-                    width={40}
-                    height={40}
-                    className="rounded-full object-cover"
-                  />
-                </div>
-              )}
-
-              {/* message bubble */}
-              <div className={`flex flex-col max-w-[70%]`}>
-                {msg.type === "text" && (
-                  <div
-                    className={`px-4 py-2 rounded-2xl break-words ${
-                      isMe ? "bg-blue-600 text-white self-end" : "bg-blue-950/50"
-                    }`}
-                  >
-                    {renderMessageContent(msg.content)}
-                  </div>
-                )}
-
-                {msg.type === "image" && msg.image_url && (
-                  <div className="rounded-xl overflow-hidden">
-                    <Image
-                      src={msg.image_url}
-                      alt="image"
-                      width={300}
-                      height={300}
-                      className="rounded-xl cursor-pointer object-cover"
-                      onClick={() => setShowImage(msg.image_url)}
-                    />
-                  </div>
-                )}
-
-                {msg.type === "video" && msg.image_url && (
-                  <div className="rounded-xl overflow-hidden cursor-pointer">
-                    {/* show a small inline video preview; click to open modal */}
-                    <video
-                      src={msg.image_url}
-                      className="rounded-xl max-w-full"
-                      onClick={() => setShowVideo(msg.image_url)}
-                      controls={false}
-                      muted
-                      playsInline
-                    />
-                    <div className="mt-2 text-xs opacity-60">{/* optional caption */}</div>
-                  </div>
-                )}
-
-                {msg.type === "audio" && msg.audio_url && (
-                  <audio controls src={msg.audio_url} className="rounded-md mt-1" />
-                )}
-
-                {msg.reactions && (
-                  <div className="flex gap-1 mt-1 text-lg">
-                    {msg.reactions.map((r: string, i: number) => (
-                      <span key={i}>{r}</span>
-                    ))}
-                  </div>
-                )}
-
-                <span className="text-xs opacity-60 mt-1">{timeAgo(msg.created_at)}</span>
+              <span className="opacity-70">
+                Replying to{" "}
+                <span className="font-semibold">
+                  {repliedMsg.sender_id === currentUser?.id
+                    ? "You"
+                    : friend?.username}
+                </span>
+              </span>
+              <div className="truncate italic mt-1 opacity-80">
+                {repliedMsg.content
+                  ? repliedMsg.content
+                  : `[${repliedMsg.type}]`}
               </div>
+            </div>
+          )}
 
-              {/* avatar right for me */}
-              {isMe && (
-                <div className="w-10 h-10 shrink-0">
-                  <Image
-                    src={avatarFor(msg.sender_id) || "/default-avatar.png"}
-                    alt="avatar"
-                    width={40}
-                    height={40}
-                    className="rounded-full object-cover"
-                  />
-                </div>
-              )}
-            </motion.div>
-          );
-        })}
-        <div ref={bottomRef} />
-      </div>
+          {/* 💬 The main message bubble */}
+          {msg.type === "text" && (
+            <div
+              className={`px-4 py-2 rounded-2xl break-words ${
+                isMe
+                  ? "bg-blue-600 text-white self-end"
+                  : "bg-blue-950/50 text-blue-100"
+              }`}
+            >
+              {renderMessageContent(msg.content)}
+            </div>
+          )}
+
+          {msg.type === "image" && msg.image_url && (
+            <div className="rounded-xl overflow-hidden">
+              <Image
+                src={msg.image_url}
+                alt="image"
+                width={300}
+                height={300}
+                className="rounded-xl cursor-pointer object-cover"
+                onClick={() => setShowImage(msg.image_url)}
+              />
+            </div>
+          )}
+
+          {msg.type === "video" && msg.image_url && (
+            <div className="rounded-xl overflow-hidden cursor-pointer">
+              <video
+                src={msg.image_url}
+                className="rounded-xl max-w-full"
+                onClick={() => setShowVideo(msg.image_url)}
+                controls={false}
+                muted
+                playsInline
+              />
+            </div>
+          )}
+
+          {msg.type === "audio" && msg.audio_url && (
+            <audio controls src={msg.audio_url} className="rounded-md mt-1" />
+          )}
+
+          {/* 💟 Reactions */}
+          {msg.reactions && (
+            <div className="flex gap-1 mt-1 text-lg">
+              {msg.reactions.map((r: string, i: number) => (
+                <span key={i}>{r}</span>
+              ))}
+            </div>
+          )}
+
+          {/* ⏱️ Time */}
+          <span className="text-xs opacity-60 mt-1">
+            {timeAgo(msg.created_at)}
+          </span>
+        </div>
+
+        {/* avatar right for me */}
+        {isMe && (
+          <div className="w-10 h-10 shrink-0">
+            <Image
+              src={avatarFor(msg.sender_id) || "/default-avatar.png"}
+              alt="avatar"
+              width={40}
+              height={40}
+              className="rounded-full object-cover"
+            />
+          </div>
+        )}
+      </motion.div>
+    );
+  })}
+
+  <div ref={bottomRef} />
+</div>
+
 
       {/* ✅ Reply Preview Bar */}
 {replyTo && (
