@@ -9,6 +9,8 @@ import { ethers } from 'ethers'
 import { useAccount, useChainId, useSwitchChain } from 'wagmi'
 import { base } from 'wagmi/chains'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { useRouter } from 'next/navigation' // ✅ added
+import { MessageCircle } from 'lucide-react' // ✅ added
 
 // ✅ Tipper contract details
 const TIPPER_ADDRESS = '0xd6cD246C2207eda9b75779F03677de4a8DBa2309'
@@ -45,11 +47,11 @@ export default function ProfileModal({
   const [sending, setSending] = useState(false)
   const [txHash, setTxHash] = useState<string | null>(null)
 
-// Wallet hooks (updated for wagmi v2+)
-const { address, isConnected } = useAccount()
-const chainId = useChainId()
-const { switchChain } = useSwitchChain()
-
+  // Wallet hooks (updated for wagmi v2+)
+  const { address, isConnected } = useAccount()
+  const chainId = useChainId()
+  const { switchChain } = useSwitchChain()
+  const router = useRouter() // ✅ added router for DM navigation
 
   // --- Fetch current logged-in user ---
   useEffect(() => {
@@ -63,34 +65,33 @@ const { switchChain } = useSwitchChain()
   const isOwner = currentUserId === userId
 
   // --- Load profile info ---
-useEffect(() => {
-  if (!userId) return;
+  useEffect(() => {
+    if (!userId) return;
 
-  const loadProfile = async () => {
-    setLoading(true);
+    const loadProfile = async () => {
+      setLoading(true);
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, username, avatar_url, wallet_address')
-      .eq('id', userId)
-      .maybeSingle();
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, username, avatar_url, wallet_address')
+        .eq('id', userId)
+        .maybeSingle();
 
-    if (error) {
-      console.error('Error loading profile:', error);
-    } else if (data) {
-      setUsername(data.username || '');
-      setWalletAddress(data.wallet_address || '');
-      setAvatarUrl(data.avatar_url || null);
-    } else {
-      console.warn(`No profile found for user ${userId}`);
-    }
+      if (error) {
+        console.error('Error loading profile:', error);
+      } else if (data) {
+        setUsername(data.username || '');
+        setWalletAddress(data.wallet_address || '');
+        setAvatarUrl(data.avatar_url || null);
+      } else {
+        console.warn(`No profile found for user ${userId}`);
+      }
 
-    setLoading(false);
-  };
+      setLoading(false);
+    };
 
-  loadProfile();
-}, [userId]);
-
+    loadProfile();
+  }, [userId]);
 
   // --- Upload Avatar ---
   const uploadAvatar = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -151,20 +152,18 @@ useEffect(() => {
       return
     }
     if (!amount || parseFloat(amount) <= 0) {
-  alert('Enter a valid amount.')
-  return
-}
+      alert('Enter a valid amount.')
+      return
+    }
 
-// ✅ Strict limits
-if (selectedToken.symbol === 'ETH' && parseFloat(amount) > 0.035) {
-  alert('❌ Max tip for ETH is 0.035 ETH.')
-  return
-}
-if (selectedToken.symbol === 'USDC' && parseFloat(amount) > 100) {
-  alert('❌ Max tip for USDC is 100 USDC.')
-  return
-}
-
+    if (selectedToken.symbol === 'ETH' && parseFloat(amount) > 0.035) {
+      alert('❌ Max tip for ETH is 0.035 ETH.')
+      return
+    }
+    if (selectedToken.symbol === 'USDC' && parseFloat(amount) > 100) {
+      alert('❌ Max tip for USDC is 100 USDC.')
+      return
+    }
 
     try {
       if (!isConnected) {
@@ -173,9 +172,8 @@ if (selectedToken.symbol === 'USDC' && parseFloat(amount) > 100) {
       }
 
       if (chainId !== base.id) {
-  await switchChain({ chainId: base.id })
-}
-
+        await switchChain({ chainId: base.id })
+      }
 
       setSending(true)
       setTxHash(null)
@@ -205,19 +203,18 @@ if (selectedToken.symbol === 'USDC' && parseFloat(amount) > 100) {
   // --- Render ---
   if (!userId) return null
   if (loading)
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-zinc-900 p-8 rounded-2xl border border-zinc-700 text-center">
-        <div className="relative w-12 h-12 mx-auto mb-4">
-          <div className="absolute inset-0 rounded-full border-4 border-blue-400 border-t-transparent animate-spin"></div>
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-zinc-900 p-8 rounded-2xl border border-zinc-700 text-center">
+          <div className="relative w-12 h-12 mx-auto mb-4">
+            <div className="absolute inset-0 rounded-full border-4 border-blue-400 border-t-transparent animate-spin"></div>
+          </div>
+          <p className="text-blue-100 text-sm font-medium animate-pulse">
+            Fetching Profile Data...
+          </p>
         </div>
-        <p className="text-blue-100 text-sm font-medium animate-pulse">
-          Fetching Profile Data...
-        </p>
       </div>
-    </div>
-  );
-
+    );
 
   return (
     <AnimatePresence>
@@ -281,17 +278,30 @@ if (selectedToken.symbol === 'USDC' && parseFloat(amount) > 100) {
             <button
               onClick={saveProfile}
               disabled={saving}
-              className="w-full bg-green-600 hover:bg-green-700 transition text-white px-4 py-2 rounded-lg"
+              className="w-full bg-green-600 hover:bg-green-700 transition text-white px-4 py-2 rounded-lg mb-3"
             >
               {saving ? 'Saving...' : 'Save Changes'}
             </button>
           ) : (
-            <button
-              onClick={() => setShowTipModal(true)}
-              className="w-full bg-blue-600 hover:bg-blue-700 transition text-white px-4 py-2 rounded-lg"
-            >
-              💸 Tip {username || 'User'}
-            </button>
+            <>
+              <button
+                onClick={() => setShowTipModal(true)}
+                className="w-full bg-blue-600 hover:bg-blue-700 transition text-white px-4 py-2 rounded-lg mb-3"
+              >
+                💸 Tip {username || 'User'}
+              </button>
+
+              {/* ✅ New Message Button (updated path) */}
+<button
+  onClick={() => router.push(`/connect/dm/${userId}`)}
+  className="w-full flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition"
+>
+  <MessageCircle size={18} />
+  Message {username || 'User'}
+</button>
+
+              
+            </>
           )}
 
           {/* Tip Modal */}
