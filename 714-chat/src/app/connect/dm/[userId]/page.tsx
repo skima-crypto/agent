@@ -92,6 +92,14 @@ export default function DMPage() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const messageInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+  if (replyTo && messageInputRef.current) {
+    messageInputRef.current.focus();
+  }
+}, [replyTo]);
+
 
   // ✅ Session check & load user + friend
   useEffect(() => {
@@ -550,18 +558,20 @@ useEffect(() => {
 
             {/* message text field (grows) */}
             <input
-              type="text"
-              placeholder="Type a message..."
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  sendMessage();
-                }
-              }}
-              className="flex-1 bg-transparent outline-none px-3 text-sm"
-            />
+  ref={messageInputRef}
+  type="text"
+  placeholder="Type a message..."
+  value={newMessage}
+  onChange={(e) => setNewMessage(e.target.value)}
+  onKeyDown={(e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  }}
+  className="flex-1 bg-transparent outline-none px-3 text-sm"
+/>
+
 
             {/* send button */}
             <button
