@@ -139,16 +139,16 @@ useEffect(() => {
     console.log("[DM] fetching messages between", currentUser.id, "and", friend.id);
 
     const { data: msgs, error } = await supabase
-      .from("direct_messages")
-      .select(`
-        *,
-        reply_to_message:direct_messages!direct_messages_reply_to_fkey (
-          id, content, type, sender_id
-        )
-      `)
-      .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${friend.id}),and(sender_id.eq.${friend.id},receiver_id.eq.${currentUser.id})`)
+  .from("direct_messages")
+  .select(`
+    *,
+    reply_to_message:direct_messages!direct_messages_reply_to_fkey (
+      id, content, type, sender_id
+    )
+  `)
+  .or(`(sender_id.eq.${currentUser.id},receiver_id.eq.${friend.id}),(sender_id.eq.${friend.id},receiver_id.eq.${currentUser.id})`)
+  .order("created_at", { ascending: true });
 
-      .order("created_at", { ascending: true });
 
     if (error) {
       console.error("[DM] loadMessages error:", error);
