@@ -93,7 +93,11 @@ export default function MessageActionsPopup({
               previewConfig={{ showPreview: false }}
               width="100%"
               height={200}
-              onEmojiClick={(e) => onReact(e.emoji)}
+              onEmojiClick={(e) => {
+  onReact(e.emoji);
+  onClose();
+}}
+
             />
           </div>
         </motion.div>

@@ -70,7 +70,8 @@ const renderMessageContent = (text: string) => {
 export default function DMPage() {
   const router = useRouter();
   const { userId } = useParams<{ userId: string }>();
-
+  const [reactions, setReactions] = useState<any[]>([]);
+  const [replyTo, setReplyTo] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -120,21 +121,40 @@ export default function DMPage() {
     loadUser();
   }, [userId]);
 
-  // ✅ Load messages
-  useEffect(() => {
-    const loadMessages = async () => {
-      if (!currentUser) return;
-      const { data } = await supabase
-        .from("direct_messages")
-        .select("*")
-        .or(
-          `and(sender_id.eq.${currentUser.id},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${currentUser.id})`
-        )
-        .order("created_at", { ascending: true });
-      setMessages(data || []);
-    };
-    loadMessages();
-  }, [currentUser, userId]);
+  // ✅ Load messages + reactions together
+useEffect(() => {
+  const loadMessages = async () => {
+    if (!currentUser) return;
+
+    // Fetch messages
+    const { data: msgs } = await supabase
+      .from("direct_messages")
+      .select("*")
+      .or(
+        `and(sender_id.eq.${currentUser.id},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${currentUser.id})`
+      )
+      .order("created_at", { ascending: true });
+
+    // Fetch reactions
+    const { data: reactions } = await supabase
+      .from("direct_message_reactions")
+      .select("*");
+
+    // Merge reactions into each message
+    const merged = (msgs || []).map((m) => ({
+      ...m,
+      reactions:
+        reactions
+          ?.filter((r) => r.message_id === m.id)
+          .map((r) => r.emoji) || [],
+    }));
+
+    setMessages(merged);
+  };
+
+  loadMessages();
+}, [currentUser, userId]);
+
 
   // ✅ Subscribe realtime for direct messages
   useEffect(() => {
@@ -163,6 +183,35 @@ export default function DMPage() {
       )
       .subscribe();
 
+
+      // ✅ Realtime listener for reactions
+useEffect(() => {
+  if (!currentUser) return;
+
+  const channel = supabase
+    .channel("direct_message_reactions")
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "direct_message_reactions" },
+      (payload) => {
+        const newReaction = payload.new;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === newReaction.message_id
+              ? { ...m, reactions: [...(m.reactions || []), newReaction.emoji] }
+              : m
+          )
+        );
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, [currentUser]);
+
+
     // Cleanup on unmount
     return () => {
       supabase.removeChannel(channel);
@@ -176,23 +225,26 @@ export default function DMPage() {
 
   // ✅ Send message
   const sendMessage = async (type = "text", content = newMessage) => {
-    if (type === "text" && !content.trim()) return;
+  if (type === "text" && !content.trim()) return;
 
-    const { error } = await supabase.from("direct_messages").insert({
-      sender_id: currentUser.id,
-      receiver_id: userId,
-      type,
-      content: type === "text" ? content : null,
-      image_url: type === "image" || type === "video" ? content : null,
-      audio_url: type === "audio" ? content : null,
-    });
+  const { error } = await supabase.from("direct_messages").insert({
+    sender_id: currentUser.id,
+    receiver_id: userId,
+    type,
+    content: type === "text" ? content : null,
+    image_url: type === "image" || type === "video" ? content : null,
+    audio_url: type === "audio" ? content : null,
+    reply_to: replyTo?.id || null, // 🆕 add this column if you want replies stored
+  });
 
-    if (error) {
-      console.error("Send error:", error.message);
-    } else {
-      setNewMessage("");
-    }
-  };
+  if (error) {
+    console.error("Send error:", error.message);
+  } else {
+    setNewMessage("");
+    setReplyTo(null); // clear reply after send
+  }
+};
+
 
   // ✅ Upload file/video/image
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -241,16 +293,36 @@ export default function DMPage() {
     setActionPopup({ visible: true, x: e.pageX, y: e.pageY, msgId });
   };
 
-  const handleReact = (emoji: string) => {
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === actionPopup.msgId
-          ? { ...m, reactions: [...(m.reactions || []), emoji] }
-          : m
-      )
-    );
-    setActionPopup({ visible: false, x: 0, y: 0 });
-  };
+  const handleReact = async (emoji: string) => {
+  if (!actionPopup.msgId || !currentUser) return;
+  const messageId = actionPopup.msgId;
+
+  // ✅ Save to Supabase
+  const { error } = await supabase
+    .from("direct_message_reactions")
+    .insert({
+      message_id: messageId,
+      user_id: currentUser.id,
+      emoji,
+    });
+
+  if (error) {
+    console.error("Reaction error:", error.message);
+    return;
+  }
+
+  // ✅ Update UI instantly
+  setMessages((prev) =>
+    prev.map((m) =>
+      m.id === messageId
+        ? { ...m, reactions: [...(m.reactions || []), emoji] }
+        : m
+    )
+  );
+
+  setActionPopup({ visible: false, x: 0, y: 0 });
+};
+
 
   const filteredMessages = searchMode
     ? messages.filter((m) =>
@@ -506,16 +578,20 @@ export default function DMPage() {
 
       {/* MESSAGE ACTIONS */}
       <MessageActionsPopup
-        visible={actionPopup.visible}
-        x={actionPopup.x}
-        y={actionPopup.y}
-        onClose={() =>
-          setActionPopup({ visible: false, x: 0, y: 0, msgId: undefined })
-        }
-        onReact={handleReact}
-        onReply={() => console.log("Reply clicked")}
-        onCopy={() => navigator.clipboard.writeText("Message copied")}
-      />
+  visible={actionPopup.visible}
+  x={actionPopup.x}
+  y={actionPopup.y}
+  onClose={() =>
+    setActionPopup({ visible: false, x: 0, y: 0, msgId: undefined })
+  }
+  onReact={handleReact}
+  onReply={() => {
+    const msg = messages.find((m) => m.id === actionPopup.msgId);
+    if (msg) setReplyTo(msg);
+    setActionPopup({ visible: false, x: 0, y: 0 });
+  }}
+  onCopy={() => navigator.clipboard.writeText("Message copied")}
+/>
     </div>
   );
 }
