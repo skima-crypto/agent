@@ -69,7 +69,7 @@ const renderMessageContent = (text: string) => {
 
 export default function DMPage() {
   const router = useRouter();
-  const { userId } = useParams<{ userId: string }>();
+  const { username } = useParams<{ username: string }>();
   const [reactions, setReactions] = useState<any[]>([]);
   const [replyTo, setReplyTo] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
@@ -120,14 +120,15 @@ export default function DMPage() {
       setCurrentUser(profile);
 
       const { data: friendProfile } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", userId)
-        .single();
+  .from("profiles")
+  .select("*")
+  .eq("username", username)
+  .single();
+
       setFriend(friendProfile);
     };
     loadUser();
-  }, [userId]);
+  }, [username]);
 
   // ✅ Load messages + reactions together
 useEffect(() => {
@@ -135,7 +136,7 @@ useEffect(() => {
     if (!currentUser) return;
 
     // fetch messages & Reply preview
-if (!currentUser?.id || !userId) return;
+if (!currentUser?.id || !username) return;
 
 const { data: msgs, error } = await supabase
   .from("direct_messages")
@@ -145,7 +146,8 @@ const { data: msgs, error } = await supabase
       id, content, type, sender_id
     )
   `)
-  .or(`(sender_id.eq.${currentUser.id},receiver_id.eq.${userId}), (sender_id.eq.${userId},receiver_id.eq.${currentUser.id})`)
+  .or(`(sender_id.eq.${currentUser.id},receiver_id.eq.${friend?.id}), (sender_id.eq.${friend?.id},receiver_id.eq.${currentUser.id})`)
+
   .order("created_at", { ascending: true });
 
 if (error) {
@@ -171,7 +173,7 @@ if (error) {
   };
 
   loadMessages();
-}, [currentUser, userId]);
+}, [currentUser, username]);
 
 
   // ✅ Subscribe realtime for direct messages
@@ -192,8 +194,8 @@ if (error) {
 
           // Only push messages related to this chat
           if (
-            (msg.sender_id === userId && msg.receiver_id === currentUser.id) ||
-            (msg.sender_id === currentUser.id && msg.receiver_id === userId)
+            (msg.sender_id === username && msg.receiver_id === currentUser.id) ||
+            (msg.sender_id === currentUser.id && msg.receiver_id === username)
           ) {
             setMessages((prev) => [...prev, msg]);
           }
@@ -206,7 +208,7 @@ if (error) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentUser, userId]);
+  }, [currentUser, username]);
 
 
         // ✅ Realtime listener for reactions
@@ -247,7 +249,7 @@ useEffect(() => {
 
   const { error } = await supabase.from("direct_messages").insert({
     sender_id: currentUser.id,
-    receiver_id: userId,
+    receiver_id: friend?.id,
     type,
     content: type === "text" ? content : null,
     image_url: type === "image" || type === "video" ? content : null,

@@ -1,13 +1,24 @@
 import { supabase } from "@/lib/supabaseClient";
 import { NextResponse } from "next/server";
 
-// GET: fetch all messages between logged-in user and [userId]
-export async function GET(req: Request, { params }: { params: { userId: string } }) {
+// GET: fetch all messages between logged-in user and [username]
+export async function GET(req: Request, { params }: { params: { username: string } }) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const me = session.user.id;
-  const other = params.userId;
+
+  // fetch the friend's user id using the username
+  const { data: friend, error: profileError } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("username", params.username)
+    .single();
+
+  if (profileError || !friend)
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+
+  const other = friend.id;
 
   const { data, error } = await supabase
     .from("direct_messages")
@@ -20,14 +31,24 @@ export async function GET(req: Request, { params }: { params: { userId: string }
 }
 
 // POST: send a new message
-export async function POST(req: Request, { params }: { params: { userId: string } }) {
+export async function POST(req: Request, { params }: { params: { username: string } }) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const sender = session.user.id;
-  const receiver = params.userId;
   const body = await req.json();
 
+  // find receiver ID by username
+  const { data: friend, error: profileError } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("username", params.username)
+    .single();
+
+  if (profileError || !friend)
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+
+  const receiver = friend.id;
   const { content, image_url, audio_url } = body;
 
   const { data, error } = await supabase
