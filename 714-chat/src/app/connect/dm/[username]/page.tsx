@@ -131,94 +131,76 @@ export default function DMPage() {
   }, [username]);
 
 
-// ✅ Load messages + reactions together (more reliable trigger)
+// ✅ Load messages once both UUIDs are known
 useEffect(() => {
-  if (!currentUser || !friend) return;
+  if (!currentUser?.id || !friend?.id) return; // wait for both
 
   const loadMessages = async () => {
-    try {
-      console.log("[DM] loading messages for", currentUser.id, friend.id);
+    console.log("[DM] fetching messages between", currentUser.id, "and", friend.id);
 
-      const { data: msgs, error } = await supabase
-        .from("direct_messages")
-        .select(`
-          *,
-          reply_to_message:direct_messages!direct_messages_reply_to_fkey (
-            id, content, type, sender_id
-          )
-        `)
-        .or(
-          `and(sender_id.eq.${currentUser.id},receiver_id.eq.${friend.id}),and(sender_id.eq.${friend.id},receiver_id.eq.${currentUser.id})`
+    const { data: msgs, error } = await supabase
+      .from("direct_messages")
+      .select(`
+        *,
+        reply_to_message:direct_messages!direct_messages_reply_to_fkey (
+          id, content, type, sender_id
         )
-        .order("created_at", { ascending: true });
+      `)
+      .or(
+        `and(sender_id.eq.${currentUser.id},receiver_id.eq.${friend.id}),
+         and(sender_id.eq.${friend.id},receiver_id.eq.${currentUser.id})`
+      )
+      .order("created_at", { ascending: true });
 
-      if (error) {
-        console.error("[DM] loadMessages error:", error);
-        // If you suspect RLS, print a hint:
-        if (error.details || error.hint) {
-          console.error("[DM] details:", error.details, "hint:", error.hint);
-        }
-        return;
-      }
-
-      console.log("[DM] fetched messages:", Array.isArray(msgs) ? msgs.length : 0);
-
-      // Normalise messages and ensure reactions array exists
-      const normalized = (msgs || []).map((m: any) => ({ ...m, reactions: m.reactions || [] }));
-
-      setMessages(normalized);
-    } catch (err) {
-      console.error("[DM] unexpected load error:", err);
+    if (error) {
+      console.error("[DM] loadMessages error:", error);
+      return;
     }
+
+    console.log("[DM] fetched:", msgs?.length || 0, "messages");
+    setMessages((msgs || []).map((m) => ({ ...m, reactions: m.reactions || [] })));
   };
 
   loadMessages();
-}, [currentUser, friend]);
+}, [currentUser?.id, friend?.id]);
+
 
 // ✅ Subscribe realtime for direct messages
 useEffect(() => {
   if (!currentUser?.id || !friend?.id) return;
 
-  const channelName = `dm-${[currentUser.id, friend.id].sort().join("-")}`; // stable channel name
-  const filter = `or(
-    and(sender_id.eq.${currentUser.id},receiver_id.eq.${friend.id}),
-    and(sender_id.eq.${friend.id},receiver_id.eq.${currentUser.id})
-  )`;
+  // 👇 always use a deterministic channel name
+  const roomKey = [currentUser.id, friend.id].sort().join("-");
+  const channel = supabase.channel(`dm-${roomKey}`);
 
-  const channel = supabase
-    .channel(channelName)
+  channel
     .on(
       "postgres_changes",
       {
-        event: "INSERT",
+        event: "*",
         schema: "public",
         table: "direct_messages",
-        filter,
+        filter: `or(
+          and(sender_id.eq.${currentUser.id},receiver_id.eq.${friend.id}),
+          and(sender_id.eq.${friend.id},receiver_id.eq.${currentUser.id})
+        )`,
       },
       (payload) => {
         const msg = payload.new as any;
-        console.log("[DM realtime] INSERT received:", msg.id);
-
-        // Avoid duplicates if message already exists (optimistic insert)
-        setMessages((prev) => {
-          if (prev.some((p) => p.id === msg.id)) return prev;
-          return [...prev, { ...msg, reactions: msg.reactions || [] }];
-        });
-      }
-    )
-    // also listen for updates (e.g. reactions, edits)
-    .on(
-      "postgres_changes",
-      {
-        event: "UPDATE",
-        schema: "public",
-        table: "direct_messages",
-        filter,
-      },
-      (payload) => {
-        const updated = payload.new as any;
-        console.log("[DM realtime] UPDATE received:", updated.id);
-        setMessages((prev) => prev.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)));
+        if (payload.eventType === "INSERT") {
+          console.log("[DM realtime] new message:", msg.id);
+          setMessages((prev) =>
+            prev.some((m) => m.id === msg.id)
+              ? prev
+              : [...prev, { ...msg, reactions: msg.reactions || [] }]
+          );
+        } else if (payload.eventType === "UPDATE") {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === msg.id ? { ...m, ...msg } : m))
+          );
+        } else if (payload.eventType === "DELETE") {
+          setMessages((prev) => prev.filter((m) => m.id !== payload.old.id));
+        }
       }
     )
     .subscribe();
@@ -227,6 +209,7 @@ useEffect(() => {
     supabase.removeChannel(channel);
   };
 }, [currentUser?.id, friend?.id]);
+
 
 
 
