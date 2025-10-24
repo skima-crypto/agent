@@ -196,7 +196,9 @@ const loadMessages = async () => {
 useEffect(() => {
   if (!currentUser?.id || !friend?.id) return;
 
-  const channel = supabase.channel(`dm-${[currentUser.id, friend.id].sort().join("-")}`);
+  const channel = supabase.channel(
+    `dm-${[currentUser.id, friend.id].sort().join("-")}`
+  );
 
   channel.on(
     "postgres_changes",
@@ -205,25 +207,54 @@ useEffect(() => {
       schema: "public",
       table: "direct_messages",
     },
-    (payload) => {
+    async (payload) => {
       const msg = payload.new as any;
       const old = payload.old as any;
-      // Only handle messages that belong to this conversation
-      if (
-        (msg && ((msg.sender_id === currentUser.id && msg.receiver_id === friend.id) ||
-                 (msg.sender_id === friend.id && msg.receiver_id === currentUser.id))) ||
-        (old && ((old.sender_id === currentUser.id && old.receiver_id === friend.id) ||
-                 (old.sender_id === friend.id && old.receiver_id === currentUser.id)))
-      ) {
-        if (payload.eventType === "INSERT" && msg) {
-          setMessages((prev) =>
-            prev.some((m) => m.id === msg.id) ? prev : [...prev, { ...msg, reactions: msg.reactions || [] }]
-          );
-        } else if (payload.eventType === "UPDATE" && msg) {
-          setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, ...msg } : m)));
-        } else if (payload.eventType === "DELETE" && old) {
-          setMessages((prev) => prev.filter((m) => m.id !== old.id));
+
+      // Only handle messages for this conversation
+      const isRelevant =
+        (msg &&
+          ((msg.sender_id === currentUser.id && msg.receiver_id === friend.id) ||
+            (msg.sender_id === friend.id && msg.receiver_id === currentUser.id))) ||
+        (old &&
+          ((old.sender_id === currentUser.id && old.receiver_id === friend.id) ||
+            (old.sender_id === friend.id && old.receiver_id === currentUser.id)));
+
+      if (!isRelevant) return;
+
+      // 🧠 Handle message insert/update/delete
+      if (payload.eventType === "INSERT" && msg) {
+        let replyToMessage = null;
+
+        // 🆕 Fetch replied-to message if exists
+        if (msg.reply_to) {
+          const { data: replyData } = await supabase
+            .from("direct_messages")
+            .select("*")
+            .eq("id", msg.reply_to)
+            .single();
+
+          replyToMessage = replyData || null;
         }
+
+        setMessages((prev) =>
+          prev.some((m) => m.id === msg.id)
+            ? prev
+            : [
+                ...prev,
+                {
+                  ...msg,
+                  reactions: msg.reactions || [],
+                  reply_to_message: replyToMessage,
+                },
+              ]
+        );
+      } else if (payload.eventType === "UPDATE" && msg) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === msg.id ? { ...m, ...msg } : m))
+        );
+      } else if (payload.eventType === "DELETE" && old) {
+        setMessages((prev) => prev.filter((m) => m.id !== old.id));
       }
     }
   );
@@ -231,11 +262,9 @@ useEffect(() => {
   channel.subscribe();
 
   return () => {
-    // safer teardown
     try {
       channel.unsubscribe();
     } catch (e) {
-      // fallback for older supabase versions:
       supabase.removeChannel(channel);
     }
   };
@@ -314,10 +343,17 @@ useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // ✅ Send message
+ // ✅ Send message
 const sendMessage = async (type = "text", content = newMessage) => {
   if (type === "text" && !content.trim()) return;
 
+  // 🧠 1️⃣ Fetch replied-to message (so sender sees preview immediately)
+  let replyToMessage = null;
+  if (replyTo?.id) {
+    replyToMessage = replyTo;
+  }
+
+  // 🧠 2️⃣ Send to Supabase
   const { data: inserted, error } = await supabase
     .from("direct_messages")
     .insert({
@@ -335,12 +371,21 @@ const sendMessage = async (type = "text", content = newMessage) => {
   if (error) {
     console.error("Send error:", error.message);
   } else if (inserted) {
-    // optimistic UI: ensure array shapes match what UI expects
-    setMessages((prev) => [...prev, { ...inserted, reactions: inserted.reactions || [] }]);
+    // 🧩 3️⃣ Optimistically add message with its reply preview
+    setMessages((prev) => [
+      ...prev,
+      {
+        ...inserted,
+        reactions: inserted.reactions || [],
+        reply_to_message: replyToMessage || null,
+      },
+    ]);
+
     setNewMessage("");
     setReplyTo(null);
   }
 };
+
 
 
 
