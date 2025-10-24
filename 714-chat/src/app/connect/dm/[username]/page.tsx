@@ -130,44 +130,43 @@ export default function DMPage() {
     loadUser();
   }, [username]);
 
-
-  // ✅ Load messages only when both IDs are available
+// Load messages only when both IDs are available
 useEffect(() => {
-  // Wait until both IDs are known
   if (!currentUser?.id || !friend?.id) return;
 
+  let cancelled = false;
   const loadMessages = async () => {
     const { data: msgs, error } = await supabase
-  .from("direct_messages")
-  .select(`
-    *,
-    reply_to_message:direct_messages!direct_messages_reply_to_fkey (
-      id, content, type, sender_id
-    )
-  `)
-  .or(
-    `and(sender_id.eq.${currentUser.id},receiver_id.eq.${friend.id}),
-     and(sender_id.eq.${friend.id},receiver_id.eq.${currentUser.id})`
-  )
-  .order("created_at", { ascending: true });
-
+      .from("direct_messages")
+      .select(`
+        *,
+        reply_to_message:direct_messages!direct_messages_reply_to_fkey (
+          id, content, type, sender_id
+        )
+      `)
+      // sender_id is either currentUser or friend AND receiver_id is either currentUser or friend
+      .in("sender_id", [currentUser.id, friend.id])
+      .in("receiver_id", [currentUser.id, friend.id])
+      .order("created_at", { ascending: true });
 
     if (error) {
       console.error("Load messages error:", error);
       return;
     }
 
-    // ✅ Only set messages if data truly exists
-    if (msgs?.length > 0) {
-      setMessages(msgs.map((m) => ({ ...m, reactions: m.reactions || [] })));
-    } else {
-      setMessages([]); // clear cleanly
+    // Always set messages to the query result (map to ensure reactions array exists)
+    if (!cancelled) {
+      const safeMsgs = (msgs || []).map((m: any) => ({ ...m, reactions: m.reactions || [] }));
+      setMessages(safeMsgs);
     }
   };
 
   loadMessages();
-}, [currentUser?.id, friend?.id]); // strictly wait for both
 
+  return () => {
+    cancelled = true;
+  };
+}, [currentUser?.id, friend?.id]);
 
 
 // ✅ Subscribe realtime for direct messages
@@ -176,42 +175,46 @@ useEffect(() => {
 
   const channel = supabase.channel(`dm-${[currentUser.id, friend.id].sort().join("-")}`);
 
-  channel
-    .on(
-      "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "direct_messages",
-      },
-      (payload) => {
-        const msg = payload.new as any;
-
-        // ✅ only handle events between currentUser & friend
-        if (
-          (msg.sender_id === currentUser.id && msg.receiver_id === friend.id) ||
-          (msg.sender_id === friend.id && msg.receiver_id === currentUser.id)
-        ) {
-          if (payload.eventType === "INSERT") {
-            setMessages((prev) =>
-              prev.some((m) => m.id === msg.id)
-                ? prev
-                : [...prev, { ...msg, reactions: msg.reactions || [] }]
-            );
-          } else if (payload.eventType === "UPDATE") {
-            setMessages((prev) =>
-              prev.map((m) => (m.id === msg.id ? { ...m, ...msg } : m))
-            );
-          } else if (payload.eventType === "DELETE") {
-            setMessages((prev) => prev.filter((m) => m.id !== payload.old.id));
-          }
+  channel.on(
+    "postgres_changes",
+    {
+      event: "*",
+      schema: "public",
+      table: "direct_messages",
+    },
+    (payload) => {
+      const msg = payload.new as any;
+      const old = payload.old as any;
+      // Only handle messages that belong to this conversation
+      if (
+        (msg && ((msg.sender_id === currentUser.id && msg.receiver_id === friend.id) ||
+                 (msg.sender_id === friend.id && msg.receiver_id === currentUser.id))) ||
+        (old && ((old.sender_id === currentUser.id && old.receiver_id === friend.id) ||
+                 (old.sender_id === friend.id && old.receiver_id === currentUser.id)))
+      ) {
+        if (payload.eventType === "INSERT" && msg) {
+          setMessages((prev) =>
+            prev.some((m) => m.id === msg.id) ? prev : [...prev, { ...msg, reactions: msg.reactions || [] }]
+          );
+        } else if (payload.eventType === "UPDATE" && msg) {
+          setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, ...msg } : m)));
+        } else if (payload.eventType === "DELETE" && old) {
+          setMessages((prev) => prev.filter((m) => m.id !== old.id));
         }
       }
-    )
-    .subscribe();
+    }
+  );
+
+  channel.subscribe();
 
   return () => {
-    supabase.removeChannel(channel);
+    // safer teardown
+    try {
+      channel.unsubscribe();
+    } catch (e) {
+      // fallback for older supabase versions:
+      supabase.removeChannel(channel);
+    }
   };
 }, [currentUser?.id, friend?.id]);
 
@@ -281,7 +284,7 @@ const sendMessage = async (type = "text", content = newMessage) => {
     .from("direct_messages")
     .insert({
       sender_id: currentUser.id,
-      receiver_id: friend.id, // ✅ guaranteed defined now
+      receiver_id: friend.id,
       type,
       content: type === "text" ? content : null,
       image_url: type === "image" || type === "video" ? content : null,
@@ -289,12 +292,13 @@ const sendMessage = async (type = "text", content = newMessage) => {
       reply_to: replyTo?.id || null,
     })
     .select()
-    .single(); // ✅ return inserted message
+    .single();
 
   if (error) {
     console.error("Send error:", error.message);
   } else if (inserted) {
-    setMessages((prev) => [...prev, inserted]); // ✅ instant UI update
+    // optimistic UI: ensure array shapes match what UI expects
+    setMessages((prev) => [...prev, { ...inserted, reactions: inserted.reactions || [] }]);
     setNewMessage("");
     setReplyTo(null);
   }
