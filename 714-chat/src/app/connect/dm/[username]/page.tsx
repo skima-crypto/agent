@@ -130,36 +130,37 @@ export default function DMPage() {
     loadUser();
   }, [username]);
 
-// Load messages only when both IDs are available
+// ✅ Load messages when both IDs are ready
 useEffect(() => {
+  // Don’t run until both user profiles are loaded
   if (!currentUser?.id || !friend?.id) return;
 
   let cancelled = false;
-  const loadMessages = async () => {
-    const { data: msgs, error } = await supabase
-      .from("direct_messages")
-      .select(`
-        *,
-        reply_to_message:direct_messages!direct_messages_reply_to_fkey (
-          id, content, type, sender_id
-        )
-      `)
-      // sender_id is either currentUser or friend AND receiver_id is either currentUser or friend
-      .in("sender_id", [currentUser.id, friend.id])
-      .in("receiver_id", [currentUser.id, friend.id])
-      .order("created_at", { ascending: true });
 
-    if (error) {
-      console.error("Load messages error:", error);
-      return;
-    }
+const loadMessages = async () => {
+  console.log("🔍 Loading messages for:", currentUser.id, friend.id);
 
-    // Always set messages to the query result (map to ensure reactions array exists)
-    if (!cancelled) {
-      const safeMsgs = (msgs || []).map((m: any) => ({ ...m, reactions: m.reactions || [] }));
-      setMessages(safeMsgs);
-    }
-  };
+  const { data: msgs, error } = await supabase
+    .from("direct_messages")
+    .select("*")
+    .or(`and(sender_id.eq."${currentUser.id}",receiver_id.eq."${friend.id}"),and(sender_id.eq."${friend.id}",receiver_id.eq."${currentUser.id}")`)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("❌ Load messages error:", error.message);
+    return;
+  }
+
+  if (!cancelled) {
+    const safeMsgs = (msgs || []).map((m: any) => ({
+      ...m,
+      reactions: m.reactions || [],
+    }));
+    setMessages(safeMsgs);
+    console.log("✅ Loaded messages:", safeMsgs.length);
+  }
+};
+
 
   loadMessages();
 
