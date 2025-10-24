@@ -167,9 +167,7 @@ useEffect(() => {
 useEffect(() => {
   if (!currentUser?.id || !friend?.id) return;
 
-  // 👇 always use a deterministic channel name
-  const roomKey = [currentUser.id, friend.id].sort().join("-");
-  const channel = supabase.channel(`dm-${roomKey}`);
+  const channel = supabase.channel(`dm-${[currentUser.id, friend.id].sort().join("-")}`);
 
   channel
     .on(
@@ -178,24 +176,28 @@ useEffect(() => {
         event: "*",
         schema: "public",
         table: "direct_messages",
-        filter: `or(and(sender_id.eq.${currentUser.id},receiver_id.eq.${friend.id}),and(sender_id.eq.${friend.id},receiver_id.eq.${currentUser.id}))`,
-
       },
       (payload) => {
         const msg = payload.new as any;
-        if (payload.eventType === "INSERT") {
-          console.log("[DM realtime] new message:", msg.id);
-          setMessages((prev) =>
-            prev.some((m) => m.id === msg.id)
-              ? prev
-              : [...prev, { ...msg, reactions: msg.reactions || [] }]
-          );
-        } else if (payload.eventType === "UPDATE") {
-          setMessages((prev) =>
-            prev.map((m) => (m.id === msg.id ? { ...m, ...msg } : m))
-          );
-        } else if (payload.eventType === "DELETE") {
-          setMessages((prev) => prev.filter((m) => m.id !== payload.old.id));
+
+        // ✅ only handle events between currentUser & friend
+        if (
+          (msg.sender_id === currentUser.id && msg.receiver_id === friend.id) ||
+          (msg.sender_id === friend.id && msg.receiver_id === currentUser.id)
+        ) {
+          if (payload.eventType === "INSERT") {
+            setMessages((prev) =>
+              prev.some((m) => m.id === msg.id)
+                ? prev
+                : [...prev, { ...msg, reactions: msg.reactions || [] }]
+            );
+          } else if (payload.eventType === "UPDATE") {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === msg.id ? { ...m, ...msg } : m))
+            );
+          } else if (payload.eventType === "DELETE") {
+            setMessages((prev) => prev.filter((m) => m.id !== payload.old.id));
+          }
         }
       }
     )
@@ -205,8 +207,6 @@ useEffect(() => {
     supabase.removeChannel(channel);
   };
 }, [currentUser?.id, friend?.id]);
-
-
 
 
         // ✅ Realtime listener for reactions
