@@ -131,8 +131,9 @@ export default function DMPage() {
   }, [username]);
 
 
-// ✅ Load messages once both UUIDs are known
+  // ✅ Load messages only when both IDs are available
 useEffect(() => {
+  // Wait until both IDs are known
   if (!currentUser?.id || !friend?.id) return;
 
   const loadMessages = async () => {
@@ -152,13 +153,16 @@ useEffect(() => {
       return;
     }
 
-    if (msgs?.length) {
+    // ✅ Only set messages if data truly exists
+    if (msgs?.length > 0) {
       setMessages(msgs.map((m) => ({ ...m, reactions: m.reactions || [] })));
+    } else {
+      setMessages([]); // clear cleanly
     }
   };
 
   loadMessages();
-}, [currentUser?.id, friend?.id]);
+}, [currentUser?.id, friend?.id]); // strictly wait for both
 
 
 
