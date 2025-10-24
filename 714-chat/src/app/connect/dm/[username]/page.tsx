@@ -140,11 +140,13 @@ useEffect(() => {
 const loadMessages = async () => {
   console.log("🔍 Loading messages for:", currentUser.id, friend.id);
 
-  // Step 1: Fetch messages between the two users
+  // Step 1: Fetch all messages between these two users
   const { data: msgs, error } = await supabase
     .from("direct_messages")
     .select("*")
-    .or(`and(sender_id.eq."${currentUser.id}",receiver_id.eq."${friend.id}"),and(sender_id.eq."${friend.id}",receiver_id.eq."${currentUser.id}")`)
+    .or(
+      `and(sender_id.eq.${currentUser.id},receiver_id.eq.${friend.id}),and(sender_id.eq.${friend.id},receiver_id.eq.${currentUser.id})`
+    )
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -152,33 +154,35 @@ const loadMessages = async () => {
     return;
   }
 
-  // Step 2: Get all reactions for these messages
+  // Step 2: Fetch reactions for all messages
   const msgIds = (msgs || []).map((m) => m.id);
+  let allReactions: any[] = [];
   if (msgIds.length > 0) {
-    const { data: allReactions, error: reactionError } = await supabase
+    const { data, error: reactionError } = await supabase
       .from("direct_message_reactions")
       .select("*")
       .in("message_id", msgIds);
-
     if (reactionError) {
       console.error("⚠️ Failed to load reactions:", reactionError.message);
+    } else {
+      allReactions = data || [];
     }
-
-    // Step 3: Combine reactions with messages
-    const safeMsgs = (msgs || []).map((m) => ({
-      ...m,
-      reactions: (allReactions || [])
-        .filter((r) => r.message_id === m.id)
-        .map((r) => r.emoji),
-    }));
-
-    setMessages(safeMsgs);
-    console.log("✅ Loaded messages with reactions:", safeMsgs.length);
-  } else {
-    setMessages(msgs || []);
-    console.log("✅ Loaded messages (no reactions):", (msgs || []).length);
   }
+
+  // Step 3: Map reply_to → actual message object
+  const messageMap = new Map((msgs || []).map((m) => [m.id, m]));
+  const safeMsgs = (msgs || []).map((m) => ({
+    ...m,
+    reactions: (allReactions || [])
+      .filter((r) => r.message_id === m.id)
+      .map((r) => r.emoji),
+    reply_to_message: m.reply_to ? messageMap.get(m.reply_to) || null : null,
+  }));
+
+  setMessages(safeMsgs);
+  console.log("✅ Loaded messages with replies + reactions:", safeMsgs.length);
 };
+
 
   loadMessages();
 
@@ -255,38 +259,53 @@ useEffect(() => {
         const reaction = payload.new as any;
         const old = payload.old as any;
 
-        if (!reaction?.message_id && !old?.message_id) return;
+        // determine which message id changed
+        const affectedMessageId = reaction?.message_id || old?.message_id;
+        if (!affectedMessageId) return;
 
-        if (payload.eventType === "INSERT" && reaction?.message_id) {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === reaction.message_id
-                ? { ...m, reactions: [...(m.reactions || []), reaction.emoji] }
-                : m
-            )
-          );
-        } else if (payload.eventType === "DELETE" && old?.message_id) {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === old.message_id
-                ? {
-                    ...m,
-                    reactions: (m.reactions || []).filter(
-                      (r: any) => r !== old.emoji
-                    ),
-                  }
-                : m
-            )
-          );
+        // Helper to re-fetch and update one message’s reactions
+        const refreshReactions = async () => {
+          try {
+            const { data: reactionRows, error: fetchErr } = await supabase
+              .from("direct_message_reactions")
+              .select("emoji")
+              .eq("message_id", affectedMessageId);
+            if (fetchErr) {
+              console.error(
+                "Failed to fetch reactions for realtime update:",
+                fetchErr.message
+              );
+              return;
+            }
+            const emojis = (reactionRows || []).map((r: any) => r.emoji);
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === affectedMessageId ? { ...m, reactions: emojis } : m
+              )
+            );
+          } catch (e) {
+            console.error("Realtime reaction handler error:", e);
+          }
+        };
+
+        // Handle INSERT / DELETE / UPDATE the same way
+        if (
+          payload.eventType === "INSERT" ||
+          payload.eventType === "DELETE" ||
+          payload.eventType === "UPDATE"
+        ) {
+          refreshReactions();
         }
       }
     )
     .subscribe();
 
+  // ✅ cleanup
   return () => {
     supabase.removeChannel(channel);
   };
 }, [currentUser?.id, friend?.id]);
+
 
 
 
@@ -482,12 +501,12 @@ const sendMessage = async (type = "text", content = newMessage) => {
 
     return (
       <motion.div
-        key={msg.id}
-        onContextMenu={(e) => handleMessageClick(e, msg.id)}
-        className={`flex items-start gap-3 ${
-          isMe ? "justify-end" : "justify-start"
-        }`}
-      >
+  key={msg.id}
+  id={`msg-${msg.id}`} // 🆕 for scrolling to original
+  onContextMenu={(e) => handleMessageClick(e, msg.id)}
+  className={`flex items-start gap-3 ${isMe ? "justify-end" : "justify-start"}`}
+>
+
         {/* avatar left for friend, right for me */}
         {!isMe && (
           <div className="w-10 h-10 shrink-0">
@@ -504,30 +523,31 @@ const sendMessage = async (type = "text", content = newMessage) => {
         {/* message bubble */}
         <div className={`flex flex-col max-w-[70%]`}>
           
-          {/* 🧩 REPLY PREVIEW (if this message replies to another) */}
-          {repliedMsg && (
-            <div
-              className={`text-xs p-2 mb-1 rounded-lg border-l-4 ${
-                isMe
-                  ? "border-blue-300 bg-blue-700/30 text-blue-100"
-                  : "border-blue-500 bg-blue-950/40 text-blue-200"
-              }`}
-            >
-              <span className="opacity-70">
-                Replying to{" "}
-                <span className="font-semibold">
-                  {repliedMsg.sender_id === currentUser?.id
-                    ? "You"
-                    : friend?.username}
-                </span>
-              </span>
-              <div className="truncate italic mt-1 opacity-80">
-                {repliedMsg.content
-                  ? repliedMsg.content
-                  : `[${repliedMsg.type}]`}
-              </div>
-            </div>
-          )}
+          {/* 🧩 REPLY PREVIEW (clickable to scroll) */}
+{repliedMsg && (
+  <div
+    onClick={() => {
+      const el = document.getElementById(`msg-${repliedMsg.id}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }}
+    className={`text-xs p-2 mb-1 rounded-lg border-l-4 cursor-pointer transition hover:bg-blue-800/30 ${
+      isMe
+        ? "border-blue-300 bg-blue-700/30 text-blue-100"
+        : "border-blue-500 bg-blue-950/40 text-blue-200"
+    }`}
+  >
+    <span className="opacity-70">
+      Replying to{" "}
+      <span className="font-semibold">
+        {repliedMsg.sender_id === currentUser?.id ? "You" : friend?.username}
+      </span>
+    </span>
+    <div className="truncate italic mt-1 opacity-80">
+      {repliedMsg.content ? repliedMsg.content : `[${repliedMsg.type}]`}
+    </div>
+  </div>
+)}
+
 
           {/* 💬 The main message bubble */}
           {msg.type === "text" && (
@@ -626,7 +646,7 @@ const sendMessage = async (type = "text", content = newMessage) => {
       {/* INPUT AREA (unified bubble) */}
       <div className="p-3 border-t border-blue-700/30">
         <div className="flex items-center gap-2 w-full">
-          <div className="flex items-center gap-2 flex-1 bg-blue-950/20 border border-blue-700/40 rounded-full px-3 py-2">
+          <div className="flex items-center gap-2 flex-1 bg-blue-950/20 border border-blue-700/40 rounded-full px-3 py-3 min-h-[56px]">
             {/* camera (hidden input with capture) */}
             <input
               ref={cameraInputRef}
