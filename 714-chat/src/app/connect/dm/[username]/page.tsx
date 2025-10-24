@@ -133,35 +133,33 @@ export default function DMPage() {
 
 // ✅ Load messages once both UUIDs are known
 useEffect(() => {
-  if (!currentUser?.id || !friend?.id) return; // wait for both
+  if (!currentUser?.id || !friend?.id) return;
 
   const loadMessages = async () => {
-    console.log("[DM] fetching messages between", currentUser.id, "and", friend.id);
-
     const { data: msgs, error } = await supabase
-  .from("direct_messages")
-  .select(`
-    *,
-    reply_to_message:direct_messages!direct_messages_reply_to_fkey (
-      id, content, type, sender_id
-    )
-  `)
-  .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${friend.id}),and(sender_id.eq.${friend.id},receiver_id.eq.${currentUser.id})`)
-  .order("created_at", { ascending: true });
-
-
+      .from("direct_messages")
+      .select(`
+        *,
+        reply_to_message:direct_messages!direct_messages_reply_to_fkey (
+          id, content, type, sender_id
+        )
+      `)
+      .or(`(and(sender_id.eq.${currentUser.id},receiver_id.eq.${friend.id})),(and(sender_id.eq.${friend.id},receiver_id.eq.${currentUser.id}))`)
+      .order("created_at", { ascending: true });
 
     if (error) {
-      console.error("[DM] loadMessages error:", error);
+      console.error("Load messages error:", error);
       return;
     }
 
-    console.log("[DM] fetched:", msgs?.length || 0, "messages");
-    setMessages((msgs || []).map((m) => ({ ...m, reactions: m.reactions || [] })));
+    if (msgs?.length) {
+      setMessages(msgs.map((m) => ({ ...m, reactions: m.reactions || [] })));
+    }
   };
 
   loadMessages();
 }, [currentUser?.id, friend?.id]);
+
 
 
 // ✅ Subscribe realtime for direct messages
