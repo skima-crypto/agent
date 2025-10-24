@@ -35,74 +35,90 @@ export default function ConnectPage() {
     subscribeToPresence();
   }, []);
 
-  // ✅ Fetch user profile and all previous chats
-  const loadUserAndChats = async () => {
-    setLoading(true);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+  // ✅ Fetch user profile and all people you’ve chatted with
+const loadUserAndChats = async () => {
+  setLoading(true);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-    if (!user) {
-      router.push("/home");
-      return;
-    }
+  if (!user) {
+    router.push("/home");
+    return;
+  }
 
-    const { data: userProfile } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
+  // get current user profile
+  const { data: userProfile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .single();
+  setCurrentUser(userProfile);
 
-    setCurrentUser(userProfile);
+  // 🧠 find all users you’ve chatted with
+  const { data: messages, error } = await supabase
+    .from("direct_messages")
+    .select(
+      `
+      id,
+      sender_id,
+      receiver_id,
+      content,
+      type,
+      created_at,
+      sender:sender_id ( id, username, avatar_url ),
+      receiver:receiver_id ( id, username, avatar_url )
+    `
+    )
+    .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+    .order("created_at", { ascending: false });
 
-    // Fetch chats (people you’ve talked to)
-    const { data, error } = await supabase
-      .from("chats")
-      .select(`
-        id,
-        last_message,
-        unread_count,
-        friend:friend_id (
-          id,
-          username,
-          avatar_url
-        )
-      `)
-      .eq("user_id", user.id)
-      .order("updated_at", { ascending: false });
-
-    if (error) {
-      console.warn("Chat fetch failed:", error.message);
-      setLoading(false);
-      return;
-    }
-
-    setFriends(
-  data
-    .map((chat) => {
-      const friendObj = Array.isArray(chat.friend)
-        ? chat.friend[0]
-        : chat.friend;
-
-      if (!friendObj) return null;
-
-      return {
-        id: chat.id,
-        friend: {
-          id: friendObj.id,
-          username: friendObj.username,
-          avatar_url: friendObj.avatar_url,
-        },
-        lastMessage: chat.last_message || "No messages yet",
-        unreadCount: chat.unread_count || 0,
-      };
-    })
-    .filter(Boolean) as ChatPreview[]
-);
-
-
+  if (error) {
+    console.error("Chat load failed:", error.message);
     setLoading(false);
-  };
+    return;
+  }
+
+  // 🔎 group messages by the other user
+  const chatMap: Record<string, ChatPreview> = {};
+
+  for (const msg of messages) {
+    // 🧩 handle array responses safely
+    const sender = Array.isArray(msg.sender) ? msg.sender[0] : msg.sender;
+    const receiver = Array.isArray(msg.receiver) ? msg.receiver[0] : msg.receiver;
+    const isSender = msg.sender_id === user.id;
+
+    const friend = isSender ? receiver : sender;
+    if (!friend) continue;
+
+    if (!chatMap[friend.id]) {
+      chatMap[friend.id] = {
+        id: friend.id,
+        friend: {
+          id: friend.id,
+          username: friend.username,
+          avatar_url: friend.avatar_url,
+        },
+        lastMessage:
+          msg.type === "text"
+            ? msg.content
+            : msg.type === "image"
+            ? "📷 Photo"
+            : msg.type === "audio"
+            ? "🎤 Audio"
+            : msg.type === "video"
+            ? "🎞️ Video"
+            : "Message",
+        unreadCount: 0,
+      };
+    }
+  }
+
+  const chats = Object.values(chatMap);
+  setFriends(chats);
+  setLoading(false);
+};
+
 
   // ✅ Presence tracking (realtime online/offline)
   const subscribeToPresence = async () => {
@@ -207,8 +223,9 @@ export default function ConnectPage() {
         {/* Recent chats */}
         <div>
           <h2 className="text-lg font-semibold text-blue-300 mb-3">
-            Recent Chats
-          </h2>
+  Chats
+</h2>
+
           {loading ? (
             <div className="flex items-center justify-center mt-10">
               <Loader2 className="animate-spin text-blue-400" size={28} />
