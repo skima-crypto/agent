@@ -216,12 +216,12 @@ useEffect(() => {
 }, [currentUser?.id, friend?.id]);
 
 
-        // ✅ Realtime listener for reactions
+// ✅ Realtime listener for reactions
 useEffect(() => {
   if (!currentUser?.id || !friend?.id) return;
 
   const channel = supabase
-    .channel(`dm-reactions-${[currentUser.id, friend.id].sort().join("-")}`)
+    .channel("dm-reactions-global") // ✅ single global channel
     .on(
       "postgres_changes",
       {
@@ -231,12 +231,11 @@ useEffect(() => {
       },
       (payload) => {
         const reaction = payload.new as any;
+        const old = payload.old as any;
 
+        if (!reaction?.message_id && !old?.message_id) return;
 
-        // only handle reactions for messages between these two users
-        if (!reaction?.message_id) return;
-
-        if (payload.eventType === "INSERT") {
+        if (payload.eventType === "INSERT" && reaction?.message_id) {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === reaction.message_id
@@ -244,15 +243,15 @@ useEffect(() => {
                 : m
             )
           );
-        } else if (payload.eventType === "DELETE") {
-          const old = payload.old as any;
-
+        } else if (payload.eventType === "DELETE" && old?.message_id) {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === old.message_id
                 ? {
                     ...m,
-                    reactions: (m.reactions || []).filter((r: any) => r !== old.emoji),
+                    reactions: (m.reactions || []).filter(
+                      (r: any) => r !== old.emoji
+                    ),
                   }
                 : m
             )
@@ -266,6 +265,7 @@ useEffect(() => {
     supabase.removeChannel(channel);
   };
 }, [currentUser?.id, friend?.id]);
+
 
 
   // ✅ Auto scroll to bottom
