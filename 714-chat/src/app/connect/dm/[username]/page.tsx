@@ -482,7 +482,8 @@ const sendMessage = async (type = "text", content = newMessage) => {
 
   return (
     <div
-      className={`flex flex-col min-h-screen ${
+  className={`flex flex-col min-h-screen pb-[90px] ${
+
         theme === "dark"
           ? "bg-gradient-to-b from-blue-950 to-blue-900 text-blue-100"
           : "bg-gray-50 text-gray-800"
@@ -539,7 +540,7 @@ const sendMessage = async (type = "text", content = newMessage) => {
       )}
 
      {/* MESSAGES */}
-<div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+<div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 scroll-smooth">
   {filteredMessages.map((msg) => {
     const isMe = msg.sender_id === currentUser?.id;
     const repliedMsg = msg.reply_to_message; // 🆕 the message being replied to
@@ -689,7 +690,7 @@ const sendMessage = async (type = "text", content = newMessage) => {
 
 
       {/* INPUT AREA (unified bubble) */}
-      <div className="p-3 border-t border-blue-700/30">
+      <div className="p-3 border-t border-blue-700/30 bg-blue-950/60 backdrop-blur-md fixed bottom-0 left-0 right-0 z-20">
         <div className="flex items-center gap-2 w-full">
           <div className="flex items-center gap-2 flex-1 bg-blue-950/20 border border-blue-700/40 rounded-full px-3 py-3 min-h-[56px]">
             {/* camera (hidden input with capture) */}
