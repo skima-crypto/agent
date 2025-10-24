@@ -266,7 +266,7 @@ const Sidebar = () => {
         </div>
 
         {/* ⚙️ Bottom Section */}
-        <div className="flex flex-col items-center mb-6 space-y-3 border-t border-blue-900/30 pt-4">
+        <div className="flex flex-col items-center mb-10 pb-4 space-y-3 border-t border-blue-900/30 pt-4">
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 bg-green-400 rounded-full animate-pulse" />
             <span

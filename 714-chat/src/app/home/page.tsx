@@ -92,7 +92,7 @@ export default function HomePage() {
         });
         if (error) return toast.error(error.message);
         toast.success("Signed in! Redirecting...");
-        router.push("/chat");
+        router.push("/home");
       }
     } catch (err: any) {
       toast.error("Auth failed: " + (err.message || err));
@@ -191,7 +191,8 @@ export default function HomePage() {
       <div className="flex flex-1">
         <Sidebar />
 
-        <main className="flex-1 lg:ml-64 p-6 relative z-10 flex flex-col items-center transition-colors duration-500">
+        <main className="flex-1 lg:ml-64 p-6 pb-20 relative z-10 flex flex-col items-center transition-colors duration-500">
+
 
           <div className="max-w-7xl w-full mx-auto flex flex-col items-center">
 
@@ -275,19 +276,6 @@ export default function HomePage() {
     </motion.p>
   </motion.div>
 </section>
-
-
-            <div className="flex items-center gap-3">
-              <ThemeToggle />
-              {sessionUser && (
-                <button
-                  onClick={handleLogout}
-                  className="px-3 py-2 rounded-xl border border-white/20 dark:border-white/10 bg-white/5 text-sm text-white/90 hover:opacity-90 transition"
-                >
-                  Logout
-                </button>
-              )}
-            </div>
           </div>
 
           {/* Auth Section */}
@@ -365,7 +353,7 @@ export default function HomePage() {
               ) : (
                 <div className="w-full flex flex-col sm:flex-row gap-3">
                   <button
-                    onClick={() => router.push("/chat")}
+                    onClick={() => router.push("home")}
                     className="flex-1 px-5 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-500 text-white font-medium shadow hover:opacity-95 transition"
                   >
                     Enter Chat
@@ -392,14 +380,6 @@ export default function HomePage() {
                   >
                     <Twitter size={26} />
                   </a>
-                  <a
-                    href="https://github.com/official-714/714"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-slate-700 dark:text-slate-200 hover:scale-110 transition"
-                  >
-                    <Github size={26} />
-                  </a>
                 </div>
               </div>
             </div>
@@ -407,47 +387,52 @@ export default function HomePage() {
 
           {/* 🚀 AI Agent Section */}
 <motion.section
-  initial={{ opacity: 0, y: 30 }}
+  initial={{ opacity: 0, y: 40 }}
   animate={{ opacity: 1, y: 0 }}
-  transition={{ delay: 0.15 }}
-  className="relative w-full max-w-3xl mt-12 p-8 rounded-3xl shadow-2xl
-             bg-white/40 dark:bg-slate-800/50 border border-white/10 dark:border-slate-700
-             backdrop-blur-xl overflow-hidden"
+  transition={{ delay: 0.15, duration: 0.6, ease: "easeOut" }}
+  className="relative w-full max-w-3xl mt-16 p-10 rounded-3xl border border-white/10
+             bg-gradient-to-br from-white/30 via-white/20 to-transparent
+             dark:from-slate-800/60 dark:via-slate-900/50 dark:to-slate-900/30
+             shadow-2xl backdrop-blur-2xl overflow-hidden"
 >
-  {/* Decorative Glow Effects */}
-  <div className="absolute -left-10 -top-10 w-40 h-40 rounded-full bg-blue-400/20 dark:bg-blue-500/10 blur-3xl" />
-  <div className="absolute -right-10 -bottom-10 w-52 h-52 rounded-full bg-indigo-400/20 dark:bg-indigo-500/10 blur-3xl" />
+  {/* Decorative Ambient Glows */}
+  <div className="absolute inset-0 pointer-events-none">
+    <div className="absolute -top-20 -left-20 w-64 h-64 bg-blue-500/20 blur-3xl rounded-full" />
+    <div className="absolute -bottom-20 -right-20 w-72 h-72 bg-indigo-500/20 blur-3xl rounded-full" />
+  </div>
 
   {/* Content */}
-  <div className="relative text-center z-10">
-    <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-3">
-      🤖 Meet Agent 714
+  <div className="relative z-10 text-center space-y-6">
+    <h3 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+      🤖 Meet <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-indigo-500">Agent 714</span>
     </h3>
-    <p className="text-sm md:text-base text-slate-600 dark:text-slate-300 mb-6 leading-relaxed max-w-2xl mx-auto">
-      Agent 714 is your AI companion for the Base network, tracking tokens, prices,
-      and on-chain insights in real time. Just paste a token or contract address
-      to explore instant analytics.
+
+    <p className="text-base md:text-lg text-slate-700 dark:text-slate-300 leading-relaxed max-w-2xl mx-auto">
+      Your AI companion for the <span className="font-semibold text-sky-500">Base Network</span> — tracking tokens, 
+      prices, and on-chain insights in real time. Paste any contract or token address to explore instant analytics.
     </p>
 
-    <ul className="text-sm md:text-base text-slate-600 dark:text-slate-300 mb-8 space-y-1 max-w-xs mx-auto text-left">
-      <li>⚡ Live token prices & charts</li>
-      <li>📊 Base network insights</li>
-      <li>🔥 Trending projects on Base</li>
+    <ul className="text-sm md:text-base text-slate-700 dark:text-slate-300 space-y-2 max-w-xs mx-auto text-left">
+      <li>⚡ Real-time token prices & charts</li>
+      <li>📊 Deep Base ecosystem analytics</li>
+      <li>🔥 Discover trending on-chain projects</li>
     </ul>
 
-    {/* Centered Button */}
+    {/* CTA Button */}
     <motion.button
-      whileHover={{ scale: 1.05, y: -2 }}
-      whileTap={{ scale: 0.97 }}
+      whileHover={{ scale: 1.06, y: -2 }}
+      whileTap={{ scale: 0.96 }}
       onClick={() => (window.location.href = '/agent')}
-      className="mx-auto flex items-center justify-center px-6 py-3 rounded-xl
-                 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold
-                 shadow-lg shadow-blue-500/30 hover:shadow-indigo-500/40 transition-all duration-300"
+      className="group inline-flex items-center gap-2 px-7 py-3 rounded-2xl font-semibold
+                 text-white bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600
+                 shadow-lg shadow-indigo-500/30 transition-all duration-300 hover:shadow-indigo-400/50"
     >
       🚀 Try Agent 714
+      <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">→</span>
     </motion.button>
   </div>
 </motion.section>
+
 
          </main>
       </div>
