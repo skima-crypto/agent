@@ -145,8 +145,8 @@ useEffect(() => {
           id, content, type, sender_id
         )
       `)
-      .or(`(and(sender_id.eq.${currentUser.id},receiver_id.eq.${friend.id})),(and(sender_id.eq.${friend.id},receiver_id.eq.${currentUser.id}))`)
-      .order("created_at", { ascending: true });
+     .or(`(and(sender_id.eq.'${currentUser.id}',receiver_id.eq.'${friend.id}')),(and(sender_id.eq.'${friend.id}',receiver_id.eq.'${currentUser.id}'))`)
+     .order("created_at", { ascending: true });
 
     if (error) {
       console.error("Load messages error:", error);
@@ -214,22 +214,46 @@ useEffect(() => {
 
         // ✅ Realtime listener for reactions
 useEffect(() => {
-  if (!currentUser) return;
+  if (!currentUser?.id || !friend?.id) return;
 
   const channel = supabase
-    .channel("direct_message_reactions")
+    .channel(`dm-reactions-${[currentUser.id, friend.id].sort().join("-")}`)
     .on(
       "postgres_changes",
-      { event: "INSERT", schema: "public", table: "direct_message_reactions" },
+      {
+        event: "*",
+        schema: "public",
+        table: "direct_message_reactions",
+      },
       (payload) => {
-        const newReaction = payload.new;
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === newReaction.message_id
-              ? { ...m, reactions: [...(m.reactions || []), newReaction.emoji] }
-              : m
-          )
-        );
+        const reaction = payload.new as any;
+
+
+        // only handle reactions for messages between these two users
+        if (!reaction?.message_id) return;
+
+        if (payload.eventType === "INSERT") {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === reaction.message_id
+                ? { ...m, reactions: [...(m.reactions || []), reaction.emoji] }
+                : m
+            )
+          );
+        } else if (payload.eventType === "DELETE") {
+          const old = payload.old as any;
+
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === old.message_id
+                ? {
+                    ...m,
+                    reactions: (m.reactions || []).filter((r: any) => r !== old.emoji),
+                  }
+                : m
+            )
+          );
+        }
       }
     )
     .subscribe();
@@ -237,7 +261,8 @@ useEffect(() => {
   return () => {
     supabase.removeChannel(channel);
   };
-}, [currentUser]);
+}, [currentUser?.id, friend?.id]);
+
 
   // ✅ Auto scroll to bottom
   useEffect(() => {
