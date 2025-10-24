@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
+import { supabaseAdmin } from "@/lib/supabaseServer"; // ✅ add this
 import { NextResponse } from "next/server";
 
 // GET: fetch all messages between logged-in user and [username]
@@ -8,7 +9,7 @@ export async function GET(req: Request, { params }: { params: { username: string
 
   const me = session.user.id;
 
-  // fetch the friend's user id using the username
+  // fetch the friend's user id using the username (this part stays anon-safe)
   const { data: friend, error: profileError } = await supabase
     .from("profiles")
     .select("id")
@@ -20,7 +21,8 @@ export async function GET(req: Request, { params }: { params: { username: string
 
   const other = friend.id;
 
-  const { data, error } = await supabase
+  // ✅ Now use supabaseAdmin for reading messages (bypasses RLS)
+  const { data, error } = await supabaseAdmin
     .from("direct_messages")
     .select("*")
     .or(`and(sender_id.eq.${me},receiver_id.eq.${other}),and(sender_id.eq.${other},receiver_id.eq.${me})`)
@@ -38,7 +40,7 @@ export async function POST(req: Request, { params }: { params: { username: strin
   const sender = session.user.id;
   const body = await req.json();
 
-  // find receiver ID by username
+  // find receiver ID by username (still anon client, safe)
   const { data: friend, error: profileError } = await supabase
     .from("profiles")
     .select("id")
@@ -51,7 +53,8 @@ export async function POST(req: Request, { params }: { params: { username: strin
   const receiver = friend.id;
   const { content, image_url, audio_url } = body;
 
-  const { data, error } = await supabase
+  // ✅ Use supabaseAdmin for inserting messages (bypasses RLS)
+  const { data, error } = await supabaseAdmin
     .from("direct_messages")
     .insert({
       sender_id: sender,
