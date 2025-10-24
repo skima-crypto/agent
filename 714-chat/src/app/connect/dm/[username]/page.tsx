@@ -140,6 +140,7 @@ useEffect(() => {
 const loadMessages = async () => {
   console.log("🔍 Loading messages for:", currentUser.id, friend.id);
 
+  // Step 1: Fetch messages between the two users
   const { data: msgs, error } = await supabase
     .from("direct_messages")
     .select("*")
@@ -151,16 +152,33 @@ const loadMessages = async () => {
     return;
   }
 
-  if (!cancelled) {
-    const safeMsgs = (msgs || []).map((m: any) => ({
+  // Step 2: Get all reactions for these messages
+  const msgIds = (msgs || []).map((m) => m.id);
+  if (msgIds.length > 0) {
+    const { data: allReactions, error: reactionError } = await supabase
+      .from("direct_message_reactions")
+      .select("*")
+      .in("message_id", msgIds);
+
+    if (reactionError) {
+      console.error("⚠️ Failed to load reactions:", reactionError.message);
+    }
+
+    // Step 3: Combine reactions with messages
+    const safeMsgs = (msgs || []).map((m) => ({
       ...m,
-      reactions: m.reactions || [],
+      reactions: (allReactions || [])
+        .filter((r) => r.message_id === m.id)
+        .map((r) => r.emoji),
     }));
+
     setMessages(safeMsgs);
-    console.log("✅ Loaded messages:", safeMsgs.length);
+    console.log("✅ Loaded messages with reactions:", safeMsgs.length);
+  } else {
+    setMessages(msgs || []);
+    console.log("✅ Loaded messages (no reactions):", (msgs || []).length);
   }
 };
-
 
   loadMessages();
 
