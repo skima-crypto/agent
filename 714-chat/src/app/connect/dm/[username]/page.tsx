@@ -138,15 +138,19 @@ useEffect(() => {
 
   const loadMessages = async () => {
     const { data: msgs, error } = await supabase
-      .from("direct_messages")
-      .select(`
-        *,
-        reply_to_message:direct_messages!direct_messages_reply_to_fkey (
-          id, content, type, sender_id
-        )
-      `)
-     .or(`(and(sender_id.eq.'${currentUser.id}',receiver_id.eq.'${friend.id}')),(and(sender_id.eq.'${friend.id}',receiver_id.eq.'${currentUser.id}'))`)
-     .order("created_at", { ascending: true });
+  .from("direct_messages")
+  .select(`
+    *,
+    reply_to_message:direct_messages!direct_messages_reply_to_fkey (
+      id, content, type, sender_id
+    )
+  `)
+  .or(
+    `and(sender_id.eq.${currentUser.id},receiver_id.eq.${friend.id}),
+     and(sender_id.eq.${friend.id},receiver_id.eq.${currentUser.id})`
+  )
+  .order("created_at", { ascending: true });
+
 
     if (error) {
       console.error("Load messages error:", error);
