@@ -1,57 +1,49 @@
 import { NextResponse } from "next/server";
-
-export const runtime = "edge"; // Faster cold starts for image generation
+import OpenAI from "openai";
 
 /**
- * 🖼️ POST /api/agent/general/image
- * Body: { prompt: string }
- * Response: { imageUrl?: string, error?: string }
+ * 🖼️ Image Generation Route
+ * ---------------------------------------------------------
+ * Handles AI image generation via OpenAI.
  */
 export async function POST(req: Request) {
   try {
     const { prompt } = await req.json();
-    if (!prompt || prompt.trim().length < 3) {
+
+    if (!prompt || typeof prompt !== "string") {
       return NextResponse.json(
-        { error: "Invalid prompt. Please describe your image clearly." },
+        { error: "Please provide a valid image prompt." },
         { status: 400 }
       );
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey)
-      return NextResponse.json(
-        { error: "Missing OpenAI API key." },
-        { status: 500 }
-      );
-
-    const res = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-image-1", // DALL·E 3 (new OpenAI image model)
-        prompt: prompt,
-        size: "1024x1024",
-        n: 1,
-      }),
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
     });
 
-    const data = await res.json();
-    if (!res.ok || !data.data?.[0]?.url) {
-      console.error("OpenAI Image API error:", data);
+    const response = await openai.images.generate({
+      model: "gpt-image-1",
+      prompt,
+      size: "1024x1024",
+    });
+
+    const imageUrl = response.data?.[0]?.url;
+
+    if (!imageUrl) {
       return NextResponse.json(
         { error: "Failed to generate image." },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ imageUrl: data.data[0].url });
-  } catch (error) {
-    console.error("Image generation error:", error);
+    return NextResponse.json({ imageUrl });
+  } catch (err) {
+    console.error("❌ Error generating image:", err);
     return NextResponse.json(
-      { error: "Unexpected server error during image generation." },
+      {
+        error:
+          err instanceof Error ? err.message : "Failed to generate image.",
+      },
       { status: 500 }
     );
   }
