@@ -90,78 +90,92 @@ export default function GeneralAgentPage() {
   };
 
   /* ---------------- Send Message ---------------- */
-  const sendMessage = async () => {
-    if (!input.trim()) return;
+const sendMessage = async () => {
+  if (!input.trim()) return;
 
-    const query = input.trim();
-    const userMessage: ChatMessage = { role: "user", content: query };
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
-    setLoading(true);
+  const query = input.trim();
+  const userMessage: ChatMessage = { role: "user", content: query };
+  setMessages((prev) => [...prev, userMessage]);
+  setInput("");
+  setLoading(true);
 
-    try {
-      if (mode === "image" || isImagePrompt(query)) {
-        // Image generation
-        const res = await fetch("/api/agent/general/image", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: query }),
-        });
-        const data = await res.json();
+  try {
+    if (mode === "image" || isImagePrompt(query)) {
+      // 🖼️ Image generation mode
+      const res = await fetch("/api/agent/general/image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: query }),
+      });
+      const data = await res.json();
 
-        if (data.imageUrl) {
-          const agentReply: ChatMessage = {
-            role: "agent",
-            content: `🖼️ Here’s the image I generated for your prompt: "${query}"`,
-            imageUrl: data.imageUrl,
-          };
-          setMessages((prev) => [...prev, agentReply]);
-        } else {
-          setMessages((prev) => [
-            ...prev,
-            { role: "agent", content: "⚠️ Image generation failed." },
-          ]);
-        }
-      } else {
-        // General text AI
-        const res = await fetch("/api/agent/general", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: query }),
-        });
-
-        const text = await res.text();
-        let data;
-        try {
-          data = JSON.parse(text);
-        } catch {
-          console.error("Invalid JSON:", text);
-          data = { reply: text };
-        }
-
-        const replyText =
-          typeof data === "object" && data.reply
-            ? data.reply
-            : typeof data === "string"
-            ? data
-            : JSON.stringify(data);
-
+      if (data.imageUrl) {
         const agentReply: ChatMessage = {
           role: "agent",
-          content: replyText.trim(),
+          content: `🖼️ Here’s the image I generated for your prompt: "${query}"`,
+          imageUrl: data.imageUrl,
         };
         setMessages((prev) => [...prev, agentReply]);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "agent",
+            content: data.error || "⚠️ Image generation failed.",
+          },
+        ]);
       }
-    } catch (err) {
-      console.error("Error:", err);
-      setMessages((prev) => [
-        ...prev,
-        { role: "agent", content: "⚠️ Something went wrong. Try again." },
-      ]);
-    } finally {
-      setLoading(false);
+    } else {
+      // 🤖 General AI response
+      const res = await fetch("/api/agent/general", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: query }),
+      });
+
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = text;
+      }
+
+            // 🧠 Safely extract AI reply text
+      let replyText = "";
+
+      if (typeof data === "string") {
+        replyText = data;
+      } else if (typeof data?.reply === "string") {
+        replyText = data.reply;
+      } else if (typeof data?.reply?.reply === "string") {
+        // handle nested { reply: { reply: "text" } }
+        replyText = data.reply.reply;
+      } else if (data?.choices?.[0]?.message?.content) {
+        replyText = data.choices[0].message.content;
+      } else {
+        // fallback (stringify for debugging)
+        replyText = "⚠️ Unexpected response format.";
+        console.log("Unexpected data structure:", data);
+      }
+
+      const agentReply: ChatMessage = {
+        role: "agent",
+        content: replyText.trim(),
+      };
+      setMessages((prev) => [...prev, agentReply]);
     }
-  };
+  } catch (err) {
+    console.error("Error:", err);
+    setMessages((prev) => [
+      ...prev,
+      { role: "agent", content: "⚠️ Something went wrong. Try again." },
+    ]);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   /* ---------------- Theme ---------------- */
   const toggleTheme = () => setTheme((p) => (p === "dark" ? "light" : "dark"));
