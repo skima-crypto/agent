@@ -25,6 +25,7 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-hot-toast": "^2.6.0",
+    "react-markdown": "^10.1.0",
     "react-swipeable": "^7.0.2",
     "recharts": "^3.3.0",
     "wagmi": "^2.18.2"
