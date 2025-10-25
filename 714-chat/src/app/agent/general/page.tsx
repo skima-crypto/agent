@@ -34,6 +34,8 @@ export default function GeneralAgentPage() {
   const [sessionLoading, setSessionLoading] = useState(true);
   const [copied, setCopied] = useState<number | null>(null);
   const [mode, setMode] = useState<"general" | "image">("general");
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
+
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -68,6 +70,14 @@ export default function GeneralAgentPage() {
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
     }
   }, [input]);
+
+  // 🌀 Auto-scroll to the bottom when messages change
+useEffect(() => {
+  if (chatEndRef.current) {
+    chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+  }
+}, [messages, loading]);
+
 
   /* ---------------- Helpers ---------------- */
   const copyToClipboard = (text: string, index: number) => {
@@ -317,6 +327,9 @@ const sendMessage = async () => {
             </div>
           </motion.div>
         )}
+
+          {/* Auto-scroll anchor */}
+  <div ref={chatEndRef} />
       </div>
 
       {/* Input Area */}
