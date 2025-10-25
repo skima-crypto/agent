@@ -1,169 +1,145 @@
-// src/lib/fetchByAddress.ts
+import axios from "axios";
 
-const COVALENT_API_KEY = process.env.NEXT_PUBLIC_COVALENT_API_KEY;
+const COVALENT_API_KEY = process.env.COVALENT_API_KEY!;
+const COINGECKO_BASE_URL = "https://api.coingecko.com/api/v3";
+const DEXSCREENER_BASE_URL = "https://api.dexscreener.com/latest/dex/tokens";
 
-export interface TokenByAddressResult {
-  id: string;
-  name: string;
-  symbol: string;
-  image: string;
-  price: string;
-  change: string;
-  chartPoints: number[];
-  description: string;
-  slug?: string; 
-  platform: string;
+/**
+ * 🧭 Detect what kind of query user entered
+ * (address, tx hash, or token symbol/name)
+ */
+function detectInputType(query: string) {
+  if (/^(0x)?[0-9a-fA-F]{40}$/.test(query)) return "evm_address";
+  if (/^[1-9A-HJ-NP-Za-km-z]{25,35}$/.test(query)) return "btc_address";
+  if (/^[1-9A-HJ-NP-Za-km-z]{43,44}$/.test(query)) return "solana_address";
+  if (/^0x[a-fA-F0-9]{64}$/.test(query)) return "tx_hash";
+  return "symbol_or_name";
 }
 
 /**
- * Resolve token details by contract address.
- * Uses Covalent first (if API key present), then CoinGecko as fallback.
+ * ⚡ Unified multi-chain token & wallet fetcher
+ * Supports: EVM, Solana, Bitcoin, Aptos, Cardano, etc.
+ * Falls back to Dexscreener and CoinGecko.
  */
-export async function fetchTokenByAddress(
-  address: string,
-  chainHint?: string
-): Promise<TokenByAddressResult | string> {
+export async function fetchByAddress(query: string) {
+  const type = detectInputType(query);
+  console.log(`🔍 Detected input type: ${type}`);
+
   try {
-    if (!address || typeof address !== "string") return "Invalid address";
+    // 1️⃣ Try Covalent (multi-chain wallet + token data)
+    if (["evm_address", "solana_address", "btc_address"].includes(type)) {
+      const chains = [
+        "eth-mainnet",
+        "bsc-mainnet",
+        "polygon-mainnet",
+        "arbitrum-mainnet",
+        "base-mainnet",
+        "avalanche-mainnet",
+        "optimism-mainnet",
+        "fantom-mainnet",
+        "zksync-mainnet",
+        "celo-mainnet",
+        "gnosis-mainnet",
+        "linea-mainnet",
+        "scroll-mainnet",
+        "mantle-mainnet",
+        "moonbeam-mainnet",
+        "solana-mainnet",
+        "bitcoin-mainnet",
+        "aptos-mainnet",
+        "cardano-mainnet",
+        "tron-mainnet",
+        "cronos-mainnet",
+        "blast-mainnet",
+        "opbnb-mainnet",
+        "hedera-mainnet",
+        "near-mainnet",
+      ];
 
-    const normalized = address.trim();
-    const isEvm = /^0x[0-9a-fA-F]{40,}$/.test(normalized);
-
-    const supportedChains = {
-      ethereum: "eth-mainnet",
-      "polygon-pos": "matic-mainnet",
-      "binance-smart-chain": "bsc-mainnet",
-      avalanche: "avalanche-mainnet",
-      optimism: "optimism-mainnet",
-      "arbitrum-one": "arbitrum-mainnet",
-      base: "base-mainnet",
-      fantom: "fantom-mainnet",
-      celo: "celo-mainnet",
-      zksync: "zksync-mainnet",
-      linea: "linea-mainnet",
-      scroll: "scroll-mainnet",
-      blast: "blast-mainnet",
-      worldchain: "worldchain-mainnet",
-      unichain: "unichain-sepolia", // testnet for now
-    };
-
-    const preferred = chainHint
-      ? [chainHint.toLowerCase()]
-      : Object.keys(supportedChains);
-
-    // 1️⃣ Try Covalent first (if API key exists)
-    if (COVALENT_API_KEY && isEvm) {
-      for (const [platform, covalentChain] of Object.entries(supportedChains)) {
+      const promises = chains.map(async (chain) => {
         try {
-          const covalentUrl = `https://api.covalenthq.com/v1/${covalentChain}/tokens/${normalized}/token_holders/?quote-currency=USD&page-size=1&key=${COVALENT_API_KEY}`;
-          const res = await fetch(covalentUrl);
-
-          if (res.ok) {
-            const data = await res.json();
-            const tokenInfo = data?.data?.items?.[0]?.contract_metadata;
-            if (tokenInfo) {
-              return {
-                id: tokenInfo.contract_address,
-                name: tokenInfo.contract_name || "Unknown Token",
-                symbol: tokenInfo.contract_ticker_symbol || "",
-                image: tokenInfo.logo_url || "",
-                price:
-                  typeof tokenInfo.quote_rate === "number"
-                    ? tokenInfo.quote_rate.toLocaleString("en-US", {
-                        style: "currency",
-                        currency: "USD",
-                      })
-                    : "N/A",
-                change: "N/A",
-                chartPoints: [],
-                description: `Token detected via Covalent (${platform}).`,
-                platform,
-              };
-            }
-          }
-        } catch (err) {
-          console.warn(`Covalent lookup failed for ${platform}:`, err);
+          const url = `https://api.covalenthq.com/v1/${chain}/address/${query}/balances_v2/?key=${COVALENT_API_KEY}`;
+          const { data } = await axios.get(url);
+          if (data?.data?.items?.length > 0) return { chain, data: data.data };
+          return null;
+        } catch {
+          return null;
         }
-      }
+      });
+
+      const results = (await Promise.all(promises)).filter(
+  (r): r is { chain: string; data: any } => r !== null
+);
+
+if (results.length > 0)
+  return {
+    source: "covalent",
+    type: "wallet",
+    query,
+    results,
+    fetchedChains: results.map((r) => r.chain),
+    updatedAt: new Date().toISOString(),
+  };
+
     }
 
-    // 2️⃣ Fallback to CoinGecko
-    const geckoResult = await fetchTokenByAddress_CoinGecko(normalized, chainHint);
-    return geckoResult;
-  } catch (err) {
-    console.error("fetchTokenByAddress error:", err);
-    return "Something went wrong while fetching token by address.";
-  }
-}
-
-/**
- * Fallback: Use CoinGecko API to find token by address
- */
-async function fetchTokenByAddress_CoinGecko(
-  normalized: string,
-  chainHint?: string
-): Promise<TokenByAddressResult | string> {
-  const supportedPlatforms = [
-    "ethereum",
-    "polygon-pos",
-    "binance-smart-chain",
-    "avalanche",
-    "optimism",
-    "arbitrum-one",
-    "fantom",
-    "celo",
-    "base",
-    "zksync",
-    "linea",
-    "scroll",
-    "blast",
-    "worldchain",
-    "unichain",
-    "tron",
-    "solana",
-  ];
-
-  const prefer = chainHint ? [chainHint.toLowerCase()] : [];
-  const platforms = [...new Set([...prefer, ...supportedPlatforms])];
-
-  for (const platform of platforms) {
+    // 2️⃣ Try Dexscreener for token contracts or tickers
     try {
-      const url = `https://api.coingecko.com/api/v3/coins/${platform}/contract/${encodeURIComponent(
-        normalized
-      )}?localization=false&tickers=false&community_data=false&developer_data=false&sparkline=true`;
-      const res = await fetch(url);
-      if (!res.ok) continue;
-      const data = await res.json();
-      if (data?.id && data?.market_data) {
-        const market = data.market_data;
+      const { data } = await axios.get(`${DEXSCREENER_BASE_URL}/${query}`);
+      if (data?.pairs?.length > 0) {
         return {
-          id: data.id,
-          name: data.name,
-          symbol: (data.symbol || "").toUpperCase(),
-          image: data.image?.thumb || "",
-          price:
-            typeof market.current_price?.usd === "number"
-              ? market.current_price.usd.toLocaleString("en-US", {
-                  style: "currency",
-                  currency: "USD",
-                })
-              : "N/A",
-          change:
-            typeof market.price_change_percentage_24h === "number"
-              ? market.price_change_percentage_24h.toFixed(2)
-              : "N/A",
-          chartPoints: market.sparkline_7d?.price || [],
-          description:
-            (data.description?.en &&
-              data.description.en.split("\n")[0].split(".")[0]) ||
-            `No description for ${data.name || data.id}.`,
-          platform,
+          source: "dexscreener",
+          type: "token",
+          results: data.pairs.map((p: any) => ({
+            token: p.baseToken.name,
+            symbol: p.baseToken.symbol,
+            chain: p.chainId,
+            priceUSD: p.priceUsd,
+            liquidity: p.liquidity?.usd,
+            volume24h: p.volume?.h24,
+            chartUrl: p.url,
+          })),
         };
       }
-    } catch (err) {
-      console.warn(`CoinGecko lookup failed for ${platform}:`, err);
+    } catch (err: any) {
+      console.warn("⚠️ Dexscreener fetch failed:", err.message);
     }
-  }
 
-  return `No token found on CoinGecko for address ${normalized}.`;
+    // 3️⃣ Try CoinGecko fallback by token name or symbol
+    try {
+      const { data: search } = await axios.get(
+        `${COINGECKO_BASE_URL}/search?query=${query}`
+      );
+      if (search.coins?.length > 0) {
+        const token = search.coins[0];
+        const { data: price } = await axios.get(
+          `${COINGECKO_BASE_URL}/simple/price?ids=${token.id}&vs_currencies=usd`
+        );
+
+        return {
+          source: "coingecko",
+          type: "token",
+          token: {
+            name: token.name,
+            symbol: token.symbol,
+            rank: token.market_cap_rank,
+            image: token.large,
+            id: token.id,
+          },
+          priceUSD: price[token.id]?.usd || null,
+        };
+      }
+    } catch (err: any) {
+      console.warn("⚠️ CoinGecko fetch failed:", err.message);
+    }
+
+    // 4️⃣ Fallback if nothing matches
+    return {
+      error: "❌ No wallet, token, or market data found for this query.",
+      query,
+    };
+  } catch (err: any) {
+    console.error("💥 fetchByAddress fatal error:", err.message);
+    return { error: err.message || "Failed to fetch data." };
+  }
 }
