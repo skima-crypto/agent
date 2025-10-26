@@ -2,45 +2,31 @@
 import { NextResponse } from "next/server";
 import { fetchByAddress, fetchMarket, fetchKnowledge } from "@/lib/crypto";
 
-/**
- * 🌍 /api/crypto
- * A universal crypto intelligence endpoint.
- * 
- * Supports:
- * - Wallet/Address queries → Covalent + Dexscreener + CoinGecko
- * - Token queries → Market + Knowledge + Charts
- * - General market summaries (no query)
- *
- * Example:
- * /api/crypto?query=eth
- * /api/crypto?query=0x1234...
- * /api/crypto        → market overview
- */
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const query = searchParams.get("query")?.trim() || "";
-
-  console.log(`🚀 Incoming query: ${query || "market overview"}`);
-
+export async function POST(req: Request) {
   try {
+    const { query } = await req.json();
+    const trimmed = query?.trim() || "";
+
+    console.log(`🚀 Incoming query: ${trimmed || "market overview"}`);
+
     // 1️⃣ No query → general market summary
-    if (!query) {
+    if (!trimmed) {
       const market = await fetchMarket();
       return NextResponse.json({ type: "market_summary", data: market });
     }
 
     // 2️⃣ Try wallet/token detection
-    const addressData = await fetchByAddress(query);
+    const addressData = await fetchByAddress(trimmed);
 
-    // 3️⃣ Try market-level data (price, trends)
-    const marketData = await fetchMarket(query);
+    // 3️⃣ Market-level data (price, trends)
+    const marketData = await fetchMarket(trimmed);
 
-    // 4️⃣ Enriched knowledge & insights
-    const knowledge = await fetchKnowledge(query);
+    // 4️⃣ Knowledge / summaries
+    const knowledge = await fetchKnowledge(trimmed);
 
-    // 5️⃣ Merge intelligently
+    // 5️⃣ Merge
     const combined = {
-      query,
+      query: trimmed,
       ...(addressData || {}),
       market: marketData || null,
       knowledge: knowledge || null,
@@ -49,7 +35,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json(combined);
   } catch (err: any) {
-    console.error("💥 /api/crypto error:", err.message);
+    console.error("💥 /api/crypto POST error:", err.message);
     return NextResponse.json(
       { error: err.message || "Internal API error" },
       { status: 500 }
