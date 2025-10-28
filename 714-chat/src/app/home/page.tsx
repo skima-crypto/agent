@@ -408,7 +408,7 @@ export default function HomePage() {
     </h3>
 
     <p className="text-base md:text-lg text-slate-700 dark:text-slate-300 leading-relaxed max-w-2xl mx-auto">
-      Your AI companion for the <span className="font-semibold text-sky-500">Base Network</span> — tracking tokens, 
+      Your AI companion for the <span className="font-semibold text-sky-500">Base Network</span>  tracking tokens, 
       prices, and on-chain insights in real time. Paste any contract or token address to explore instant analytics.
     </p>
 

@@ -101,7 +101,7 @@ const Sidebar = () => {
               className="cursor-pointer"
             >
               <Image
-                src="https://i.postimg.cc/t4b28Nt9/714BG.jpg"
+                src="https://i.postimg.cc/D0nhZkkc/favicon.jpg"
                 alt="714 Logo"
                 width={100}
                 height={100}
@@ -249,7 +249,7 @@ const Sidebar = () => {
                                   transition={{ duration: 0.3 }}
                                   className="ml-8 mt-1 text-xs italic text-blue-400"
                                 >
-                                  🚧 {name} — Coming soon!
+                                  🚧 {name}  Coming soon!
                                 </motion.p>
                               )}
                             </AnimatePresence>

@@ -1,333 +1,547 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import Footer from '@/components/Footer';
-import { supabase } from '@/lib/supabaseClient';
 import { motion } from 'framer-motion';
 import {
-  Mail,
-  User,
-  MessagesSquare,
-  Sparkles,
+  Menu,
+  X,
+  Home,
+  MessageSquare,
   Gift,
-  Database,
+  Sparkles,
   Repeat,
+  LayoutDashboard,
+  Users2,
+  LogOut,
+  User,
+  Mail,
 } from 'lucide-react';
+import { supabase } from '@/lib/supabaseClient';
+import Footer from '@/components/Footer';
 
-// === Replace these with your own image / logo URLs ===
-const LOGO_BACKGROUND_URL = '/images/logo-bg.jpg';
-const HERO_IMAGE_URL = '/images/hero-showcase.png';
-const AGENT_UI_PREVIEW_URL = '/images/agent-ui-preview.png';
-const FEATURES_IMAGE_URL = '/images/features-grid.png';
+/* ====== CONFIG: Replace these URLs with your own public image URLs ====== */
+const LOGO_URL = 'https://i.postimg.cc/dQWBNrsH/favicon.jpg';
+const HERO_URL = 'https://yourdomain.com/hero.png';
+const FEATURE_CHAT = 'https://i.postimg.cc/wvCr1N1h/chat-interface.png';
+const FEATURE_GIFT = 'https://i.postimg.cc/266ccwZP/ctip.png';
+const FEATURE_AGENT = 'https://i.postimg.cc/L541BCgg/Ai-chat.png';
+const FEATURE_TRADE = 'https://yourdomain.com/feature-trade.png';
+const FEATURE_DASHBOARD = 'https://yourdomain.com/feature-dashboard.png';
+const FEATURE_COMMUNITY = 'https://yourdomain.com/feature-community.png';
+/* ======================================================================= */
 
-export default function LandingPage() {
+const FEATURES = [
+  {
+    Icon: MessageSquare,
+    title: 'Peer to Peer Chat',
+    desc:
+      'Start private, real time chats with message delivery, previews, and reactions.',
+    imageUrl: FEATURE_CHAT,
+  },
+  {
+    Icon: Gift,
+    title: 'Send Gifts on Base',
+    desc: 'Tip friends and creators with Base ETH or USDC directly inside chat.',
+    imageUrl: FEATURE_GIFT,
+  },
+  {
+    Icon: Sparkles,
+    title: 'Agent 714',
+    desc: 'Use AI tools inside the agent for image gen, crypto helpers, and quick commands.',
+    imageUrl: FEATURE_AGENT,
+  },
+  {
+    Icon: Repeat,
+    title: 'Recurring Buy Sell Agent',
+    desc:
+      'Automate recurring trades with schedules, rules, and customizable strategies.',
+    imageUrl: FEATURE_TRADE,
+  },
+  {
+    Icon: LayoutDashboard,
+    title: 'Project Dashboard',
+    desc: 'Host airdrop events, track engagement, and onboard users with analytics.',
+    imageUrl: FEATURE_DASHBOARD,
+  },
+  {
+    Icon: Users2,
+    title: 'Group and Community',
+    desc:
+      'Create private or gated communities to share insights, signals, and collaborate.',
+    imageUrl: FEATURE_COMMUNITY,
+  },
+];
+
+/* ====== Motion variants ====== */
+const stagger = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: { staggerChildren: 0.12 },
+  },
+};
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 18 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.6 } },
+};
+
+export default function LandingPageFull() {
   const router = useRouter();
 
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [session, setSession] = useState<any | null>(null);
+  const [user, setUser] = useState<any | null>(null);
+  const [showSignIn, setShowSignIn] = useState(false);
+  const [email, setEmail] = useState('');
+  const [sendingMagicLink, setSendingMagicLink] = useState(false);
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
+
+  // session check on mount
   useEffect(() => {
-    const checkSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data?.session) router.push('/home');
+    const init = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const s = data?.session ?? null;
+        setSession(s);
+        if (s?.user) {
+          setUser(s.user);
+        }
+      } catch (e) {
+        console.error('Session check error', e);
+      }
     };
-    checkSession();
-  }, [router]);
+    init();
+
+const {
+  data: { subscription },
+} = supabase.auth.onAuthStateChange((event, session) => {
+  if (session?.user) {
+    setSession(session);
+    setUser(session.user);
+  } else {
+    setSession(null);
+    setUser(null);
+  }
+});
+
+    return () => {
+      subscription?.unsubscribe();
+    };
+  }, []);
+
+  // sign out
+  const signOut = async () => {
+    try {
+      await supabase.auth.signOut();
+      setSession(null);
+      setUser(null);
+      setAuthMessage('Signed out');
+      router.push('/');
+    } catch (e) {
+      console.error('Sign out error', e);
+      setAuthMessage('Error signing out');
+    }
+  };
+
+  // send magic link
+  const sendMagicLink = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!email) {
+      setAuthMessage('Please enter your email');
+      return;
+    }
+    setSendingMagicLink(true);
+    setAuthMessage(null);
+    try {
+      const { data, error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${location.origin}/auth/callback`,
+        },
+      });
+      if (error) throw error;
+      setAuthMessage('Magic link sent. Check your email.');
+      setEmail('');
+    } catch (err: any) {
+      console.error('Magic link error', err);
+      setAuthMessage(err?.message ?? 'Could not send magic link');
+    } finally {
+      setSendingMagicLink(false);
+    }
+  };
+
+  // Nav links
+  const navLinks = [
+    { label: 'Home', href: '/', Icon: Home },
+    { label: 'Connect', href: '/connect', Icon: MessageSquare },
+    { label: 'Agent', href: '/agent', Icon: Sparkles },
+    { label: 'Dashboard', href: '/projects', Icon: LayoutDashboard },
+  ];
 
   return (
-    <div className="relative w-full min-h-screen bg-black text-white overflow-x-hidden">
-      {/* Background texture */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10"
-        style={{
-          backgroundImage:
-            'radial-gradient(circle at 10% 20%, rgba(59,130,246,0.06), transparent 12%), radial-gradient(circle at 90% 80%, rgba(14,165,233,0.04), transparent 12%), linear-gradient(180deg, rgba(0,0,0,0.85), rgba(2,6,23,0.98))',
-          backgroundBlendMode: 'screen, screen, normal',
-        }}
-      />
+    <div className="min-h-screen flex flex-col bg-black text-white">
+      {/* NAVBAR */}
+      <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-sm bg-black/40 border-b border-white/6">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-3">
+              <button
+                className="md:hidden p-2 rounded-md hover:bg-white/6"
+                onClick={() => setSidebarOpen(true)}
+                aria-label="Open menu"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
 
-      {/* NAV */}
-      <header className="fixed left-0 right-0 z-40 backdrop-blur-sm bg-black/30 border-b border-white/10">
-        <div className="max-w-[1200px] mx-auto px-6 py-3 flex items-center justify-between">
-          {/* Logo */}
-          <div className="flex items-center gap-3">
-            <div className="relative w-10 h-10">
-              {LOGO_BACKGROUND_URL && (
-                <Image
-                  src={LOGO_BACKGROUND_URL}
-                  alt="logo background"
-                  fill
-                  className="rounded-full opacity-90 object-cover"
-                />
-              )}
-              <div className="relative w-10 h-10 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-600 to-blue-400 shadow-md">
-                <svg
-                  viewBox="0 0 24 24"
-                  className="w-6 h-6"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M6 8.5C8 5.5 16 5 18 8"
-                    stroke="white"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M6 15.5C8 18.5 16 19 18 15.5"
-                    stroke="white"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
+              <div
+                className="flex items-center gap-3 cursor-pointer"
+                onClick={() => router.push('/')}
+              >
+                <div className="relative w-10 h-10 rounded-full overflow-hidden bg-white/5">
+                  <Image src={LOGO_URL} alt="logo" fill className="object-cover" />
+                </div>
+                <div className="leading-tight">
+                  <div className="font-semibold">SKIMA</div>
+                  <div className="text-xs text-white/60">Where AI meets the chain</div>
+                </div>
               </div>
             </div>
-            <div>
-              <div className="font-semibold text-white text-lg">SKIMA</div>
-              <div className="text-xs text-white/60 -mt-0.5">
-                Where AI meets the chain
-              </div>
+
+            <div className="hidden md:flex items-center gap-6">
+              {navLinks.map((ln) => (
+                <button
+                  key={ln.href}
+                  onClick={() => router.push(ln.href)}
+                  className="flex items-center gap-2 text-sm text-white/80 hover:text-white transition"
+                >
+                  <ln.Icon className="w-4 h-4" />
+                  {ln.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-3">
+              {user ? (
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 bg-white/5 px-3 py-1 rounded-full">
+                    <User className="w-4 h-4" />
+                    <span className="text-sm">{user.email ?? user.user_metadata?.name ?? 'User'}</span>
+                  </div>
+                  <button
+                    onClick={signOut}
+                    className="px-3 py-1 rounded-md bg-white/6 hover:bg-white/8 flex items-center gap-2"
+                    title="Sign out"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span className="hidden sm:inline text-sm">Sign out</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowSignIn(true)}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-400 text-black font-semibold"
+                  >
+                    Sign in
+                  </button>
+                </div>
+              )}
             </div>
           </div>
-
-          {/* Nav actions */}
-          <nav className="flex items-center gap-4">
-            <a
-              href="https://twitter.com/agent714_"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hidden md:flex items-center gap-2 text-sm text-white/85 hover:text-white transition"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M22 5.92c-.66.29-1.36.49-2.11.58a3.7 3.7 0 0 0 1.62-2.04 7.36 7.36 0 0 1-2.33.88A3.68 3.68 0 0 0 12.3 8.1c0 .29.03.57.09.84A10.46 10.46 0 0 1 3.16 4.74a3.66 3.66 0 0 0 1.14 4.92c-.6-.02-1.16-.18-1.64-.45v.05c0 1.76 1.25 3.23 2.9 3.56-.5.14-1.03.17-1.58.06.45 1.4 1.74 2.42 3.27 2.45A7.36 7.36 0 0 1 2 19.53 10.38 10.38 0 0 0 7.13 21c6.07 0 9.39-5.07 9.39-9.46v-.43c.64-.44 1.2-.98 1.64-1.6-.58.26-1.2.44-1.86.52A3.63 3.63 0 0 0 22 5.92z" />
-              </svg>
-              <span>@agent714_</span>
-            </a>
-            <button
-              onClick={() => router.push('/home')}
-              className="px-4 py-2 rounded-xl bg-white text-black font-semibold text-sm shadow-sm hover:scale-[1.02] transition-transform"
-            >
-              Open App
-            </button>
-          </nav>
         </div>
       </header>
 
-      {/* MAIN */}
-      <main className="w-full relative z-10 pt-20">
-        {/* HERO */}
-        <section className="relative min-h-[70vh] flex flex-col md:flex-row items-center justify-center px-6 md:px-10 gap-10 mt-10">
-          {/* Left */}
-          <motion.div
-            initial={{ opacity: 0, x: -40 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.8 }}
-            className="w-full md:w-1/2 text-center md:text-left"
+      {/* MOBILE SIDEBAR */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setSidebarOpen(false)}
+          />
+          <motion.aside
+            initial={{ x: '-100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '-100%' }}
+            className="relative w-72 max-w-full h-full bg-[#07070b] p-4 shadow-xl"
           >
-            <h1 className="text-4xl md:text-6xl font-extrabold leading-tight mb-4 text-white">
-              SKIMA — chat, tip & automate on Base
-            </h1>
-            <p className="text-lg text-white/80 mb-6 max-w-xl mx-auto md:mx-0">
-              Blue, black, and white — the new SKIMA brand. Connect peer-to-peer,
-              chat seamlessly, and send gifts (Base ETH / USDC) directly inside
-              chat.
-            </p>
-            <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
-              <motion.button
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => router.push('/agent')}
-                className="px-6 py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-400 text-black font-semibold shadow-md"
-              >
-                Try Agent
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => router.push('/home')}
-                className="px-6 py-3 rounded-2xl bg-white/6 border border-white/10 text-white font-medium"
-              >
-                Enter SKIMA
-              </motion.button>
-            </div>
-            <p className="mt-6 text-sm text-white/60 max-w-md mx-auto md:mx-0">
-              <strong>Quick:</strong> Click any profile in chat to send Base ETH
-              or USDC — instantly.
-            </p>
-          </motion.div>
-
-          {/* Right */}
-          <motion.div
-            initial={{ opacity: 0, x: 40 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.9 }}
-            className="w-full md:w-1/2 flex justify-center md:justify-end"
-          >
-            <div className="w-full max-w-[420px] relative rounded-3xl bg-gradient-to-b from-white/5 to-white/[0.08] border border-white/10 backdrop-blur-2xl p-6 shadow-2xl overflow-hidden">
-              <div className="absolute -left-20 -top-20 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl" />
-              <div className="absolute -right-10 -bottom-16 w-56 h-56 bg-blue-400/8 rounded-full blur-3xl" />
-              <div className="relative z-10">
-                {HERO_IMAGE_URL ? (
-                  <Image
-                    src={HERO_IMAGE_URL}
-                    alt="Hero showcase"
-                    width={400}
-                    height={300}
-                    className="rounded-2xl object-cover"
-                  />
-                ) : (
-                  <div className="text-white/50 text-sm text-center p-10">
-                    Add your hero image URL in <span className="font-mono">HERO_IMAGE_URL</span>
-                  </div>
-                )}
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="relative w-10 h-10 rounded-full overflow-hidden">
+                  <Image src={LOGO_URL} alt="logo" fill className="object-cover" />
+                </div>
+                <div>
+                  <div className="font-semibold">SKIMA</div>
+                  <div className="text-xs text-white/60">AI on Base</div>
+                </div>
               </div>
+              <button onClick={() => setSidebarOpen(false)} className="p-2 rounded-md hover:bg-white/6">
+                <X className="w-5 h-5" />
+              </button>
             </div>
-          </motion.div>
+
+            <nav className="flex flex-col gap-2">
+              {navLinks.map((ln) => (
+                <button
+                  key={ln.href}
+                  onClick={() => {
+                    router.push(ln.href);
+                    setSidebarOpen(false);
+                  }}
+                  className="flex items-center gap-3 p-3 rounded-md hover:bg-white/6 text-left"
+                >
+                  <ln.Icon className="w-5 h-5" />
+                  <span>{ln.label}</span>
+                </button>
+              ))}
+            </nav>
+
+            <div className="mt-6">
+              {user ? (
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-full bg-white/6">
+                    <User className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="font-medium">{user.email ?? 'User'}</div>
+                    <button onClick={signOut} className="text-sm text-white/70 hover:text-white mt-1">
+                      Sign out
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <button
+                    onClick={() => {
+                      setShowSignIn(true);
+                      setSidebarOpen(false);
+                    }}
+                    className="w-full px-4 py-2 rounded-xl bg-blue-600 text-black font-semibold"
+                  >
+                    Sign in
+                  </button>
+                </div>
+              )}
+            </div>
+          </motion.aside>
+        </div>
+      )}
+
+      {/* MAIN CONTENT */}
+      <main className="pt-20 flex-1">
+        {/* HERO */}
+        <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-20">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+            <motion.div initial="hidden" animate="show" variants={stagger}>
+              <motion.h1 variants={fadeUp} className="text-4xl md:text-6xl font-extrabold leading-tight">
+                Chat, tip and automate on Base
+              </motion.h1>
+              <motion.p variants={fadeUp} className="mt-4 text-lg text-white/80 max-w-2xl">
+                Connect peer to peer, send Base ETH and USDC directly in chat, and use Agent 714 to automate tasks and trades.
+              </motion.p>
+
+              <motion.div variants={fadeUp} className="mt-6 flex flex-wrap gap-3">
+                <button
+                  onClick={() => router.push('/agent')}
+                  className="px-5 py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-400 text-black font-semibold"
+                >
+                  Try Agent
+                </button>
+                <button
+                  onClick={() => router.push('/home')}
+                  className="px-5 py-3 rounded-2xl bg-white/6 text-white border border-white/10"
+                >
+                  Enter SKIMA
+                </button>
+                <button
+                  onClick={() => {
+                    const el = document.getElementById('features');
+                    el?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="px-4 py-3 rounded-2xl bg-white/4 text-white/90 border border-white/8"
+                >
+                  Explore features
+                </button>
+              </motion.div>
+
+              <motion.div variants={fadeUp} className="mt-6 text-sm text-white/60">
+                <strong>Quick:</strong> Click any profile in chat to send Base ETH or USDC instantly.
+              </motion.div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.8 }}
+              className="flex justify-center"
+            >
+              <div className="w-full max-w-md rounded-3xl p-4 bg-white/5 border border-white/8 shadow-xl">
+                <Image
+                  src={HERO_URL}
+                  alt="Hero"
+                  width={600}
+                  height={420}
+                  className="rounded-xl object-cover"
+                />
+              </div>
+            </motion.div>
+          </div>
         </section>
 
         {/* FEATURES */}
-        <section className="py-16 bg-gradient-to-b from-black to-[#03060a]">
-          <div className="max-w-6xl mx-auto px-6">
-            <motion.h2
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5 }}
-              className="text-3xl font-bold text-blue-300 mb-6"
-            >
-              What SKIMA does
-            </motion.h2>
+        <section id="features" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <motion.h2
+            initial={{ opacity: 0, y: 18 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="text-3xl md:text-4xl font-bold text-center mb-10"
+          >
+            Core features and upcoming releases
+          </motion.h2>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-              <FeatureCard
-                Icon={MessagesSquare}
-                title="Peer-to-peer chat"
-                desc="/connect lets you discover people and start private chats — realtime and simple."
-                imageUrl={FEATURES_IMAGE_URL}
-              />
-              <FeatureCard
-                Icon={Gift}
-                title="Send gifts on Base"
-                desc="Tip or gift Base ETH & USDC directly inside chat. No wallet hopping — it’s native."
-                imageUrl={FEATURES_IMAGE_URL}
-              />
-              <FeatureCard
-                Icon={Sparkles}
-                title="Agent 714"
-                desc="Switch between general, image-gen, or crypto modes inside /agent."
-                imageUrl={FEATURES_IMAGE_URL}
-              />
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            {FEATURES.map((f, idx) => (
+              <motion.article
+                key={f.title}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.08, duration: 0.5 }}
+                className="rounded-2xl bg-white/5 border border-white/8 p-5 flex flex-col"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-md bg-blue-600 text-black inline-flex">
+                      <f.Icon className="w-5 h-5" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-blue-200">{f.title}</h3>
+                  </div>
+                </div>
 
-            {/* Quick Tour */}
-            <div className="rounded-2xl p-6 bg-white/5 border border-white/10 backdrop-blur-sm">
-              <h3 className="text-xl font-semibold text-blue-200 mb-3">
-                Quick tour — how to get started
-              </h3>
-              <ol className="list-decimal list-inside text-white/80 space-y-2 text-sm md:text-base">
-                <li className="flex items-start gap-3">
-                  <Mail className="mt-1" /> Signup with email (or wallet).
-                </li>
-                <li className="flex items-start gap-3">
-                  <User className="mt-1" /> Customize your profile.
-                </li>
-                <li className="flex items-start gap-3">
-                  <MessagesSquare className="mt-1" /> Go to{' '}
-                  <span className="font-medium">/connect</span> to chat.
-                </li>
-                <li className="flex items-start gap-3">
-                  <Sparkles className="mt-1" /> Use{' '}
-                  <span className="font-medium">/agent</span> for AI tools.
-                </li>
-                <li className="flex items-start gap-3">
-                  <Gift className="mt-1" /> Send gifts in chat — Base ETH or USDC.
-                </li>
-              </ol>
-            </div>
+                <p className="text-white/75 mt-3 flex-1">{f.desc}</p>
+
+                <div className="mt-4 rounded-lg overflow-hidden h-40 bg-white/6">
+                  <Image
+                    src={f.imageUrl}
+                    alt={f.title}
+                    width={600}
+                    height={360}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              </motion.article>
+            ))}
           </div>
         </section>
 
         {/* CTA */}
-        <section className="py-16 text-center">
+        <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            whileInView={{ opacity: 1, scale: 1 }}
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
+            className="rounded-2xl p-8 bg-gradient-to-r from-blue-700/10 to-purple-700/8 border border-white/8 flex flex-col md:flex-row items-center justify-between gap-6"
           >
-            <h3 className="text-3xl font-bold mb-4">Ready to explore?</h3>
-            <p className="text-white/80 mb-6">
-              Join SKIMA to chat, tip, and let Agent 714 help you onchain.
-            </p>
-            <div className="flex items-center justify-center gap-4">
+            <div>
+              <h4 className="text-2xl font-bold">Ready to explore SKIMA?</h4>
+              <p className="text-white/70 mt-1">Join now to chat, tip, and automate on chain with Agent 714.</p>
+            </div>
+            <div className="flex gap-3">
               <button
                 onClick={() => router.push('/home')}
-                className="px-6 py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-400 text-black font-semibold"
+                className="px-5 py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-400 text-black font-semibold"
               >
                 Enter SKIMA
               </button>
-              <a
-                href="https://twitter.com/agent714_"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-5 py-3 rounded-2xl bg-white/10 border border-white/10 text-white"
+              <button
+                onClick={() => setShowSignIn(true)}
+                className="px-5 py-3 rounded-2xl bg-white/6 border border-white/8 text-white"
               >
-                Follow @agent714_
-              </a>
+                Sign in
+              </button>
             </div>
           </motion.div>
         </section>
-
-        <div className="h-20" />
       </main>
 
       <Footer />
-    </div>
-  );
-}
 
-// === FEATURE CARD COMPONENT ===
-type FeatureCardProps = {
-  Icon: React.ComponentType<{ size?: number; className?: string }>;
-  title: string;
-  desc: string;
-  imageUrl?: string;
-};
-
-function FeatureCard({ Icon, title, desc, imageUrl }: FeatureCardProps) {
-  return (
-    <motion.div
-      whileHover={{ y: -6 }}
-      transition={{ type: 'spring', stiffness: 160 }}
-      className="rounded-2xl p-6 bg-white/5 border border-white/10 backdrop-blur-sm flex flex-col gap-4 hover:bg-white/[0.07] transition-colors"
-    >
-      <div className="flex items-center gap-3">
-        <div className="p-2 rounded-md bg-blue-600 text-black inline-flex">
-          <Icon size={18} />
-        </div>
-        <div className="text-lg font-semibold text-blue-200">{title}</div>
-      </div>
-
-      <p className="text-white/75 flex-1 text-sm md:text-base leading-relaxed">
-        {desc}
-      </p>
-
-      <div className="w-full h-28 rounded-lg overflow-hidden bg-white/10 flex items-center justify-center">
-        {imageUrl ? (
-          <Image
-            src={imageUrl}
-            alt={title}
-            width={300}
-            height={160}
-            className="w-full h-full object-cover"
+      {/* SIGN IN MODAL */}
+      {showSignIn && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setShowSignIn(false)}
+            aria-hidden
           />
-        ) : (
-          <div className="text-white/50 text-xs md:text-sm text-center px-3">
-            Add image URL in <span className="font-mono text-blue-300">FEATURES_IMAGE_URL</span>
-          </div>
-        )}
-      </div>
-    </motion.div>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.15 }}
+            className="relative z-50 w-full max-w-md p-6 rounded-2xl bg-[#07070b] border border-white/8 shadow-2xl"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="relative w-10 h-10 rounded-full overflow-hidden">
+                  <Image src={LOGO_URL} alt="logo" fill className="object-cover" />
+                </div>
+                <div>
+                  <div className="font-semibold">Sign in to SKIMA</div>
+                  <div className="text-xs text-white/60">Enter your email to get a magic link</div>
+                </div>
+              </div>
+              <button onClick={() => setShowSignIn(false)} className="p-2 rounded-md hover:bg-white/6">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={sendMagicLink} className="space-y-3">
+              <label className="block text-sm text-white/80">
+                <div className="flex items-center gap-2 mb-1">
+                  <Mail className="w-4 h-4" />
+                  Email
+                </div>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="mt-1 w-full rounded-md bg-white/5 border border-white/8 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </label>
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="submit"
+                  disabled={sendingMagicLink}
+                  className="px-4 py-2 rounded-lg bg-blue-600 text-black font-semibold"
+                >
+                  {sendingMagicLink ? 'Sending...' : 'Send magic link'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    // wallet auth placeholder
+                    setAuthMessage('Wallet auth coming soon');
+                  }}
+                  className="px-4 py-2 rounded-lg bg-white/6"
+                >
+                  Sign in with wallet
+                </button>
+              </div>
+
+              {authMessage && <div className="text-sm text-white/70 mt-2">{authMessage}</div>}
+            </form>
+
+            <div className="mt-4 text-xs text-white/60">
+              By signing in you agree to the terms of service.
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </div>
   );
 }
