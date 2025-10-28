@@ -104,18 +104,16 @@ export default function CryptoAgentPage() {
       let agentReply: ChatMessage;
 
       if (data.error) {
-        agentReply = { role: "agent", content: `⚠️ ${data.error}` };
-      } else if (data.summary) {
-        agentReply = {
-          role: "agent",
-          content: data.summary || "No data found.",
-        };
-      } else {
-        agentReply = {
-          role: "agent",
-          content: "⚠️ Unexpected response format.",
-        };
-      }
+  agentReply = { role: "agent", content: `⚠️ ${data.error}` };
+} else {
+  const content =
+    data.knowledge?.summary ||
+    data.market?.type ||
+    JSON.stringify(data, null, 2) ||
+    "No data found.";
+  agentReply = { role: "agent", content };
+}
+
 
       setMessages((prev) => [...prev, agentReply]);
     } catch (err) {
