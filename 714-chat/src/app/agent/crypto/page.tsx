@@ -155,12 +155,12 @@ export default function CryptoAgentPage() {
         className={`p-4 border-b ${borderColor} flex items-center justify-between`}
       >
         <button
-          onClick={() => router.push("/agent/general")}
+          onClick={() => router.push("/agent/")}
           className="flex items-center gap-2 hover:text-blue-500 transition"
         >
           <ArrowLeft size={20} />
           <span className="font-semibold hidden sm:block">
-            Back to General Agent
+            Back to Agent
           </span>
         </button>
 
