@@ -182,7 +182,7 @@ const {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col bg-black text-white">
+    <div className="min-h-screen flex flex-col bg-blue-950 text-white">
       {/* NAVBAR */}
       <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-sm bg-black/40 border-b border-white/6">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -242,7 +242,7 @@ const {
               ) : (
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setShowSignIn(true)}
+                    onClick={() => router.push('/home')}
                     className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-400 text-black font-semibold"
                   >
                     Sign in
@@ -330,7 +330,7 @@ const {
       )}
 
       {/* MAIN CONTENT */}
-      <main className="pt-20 flex-1">
+      <main className="pt-20 pb-24 flex-1">
         {/* HERO */}
         <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-20">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
@@ -455,7 +455,7 @@ const {
                 Enter SKIMA
               </button>
               <button
-                onClick={() => setShowSignIn(true)}
+                onClick={() => router.push('/home')}
                 className="px-5 py-3 rounded-2xl bg-white/6 border border-white/8 text-white"
               >
                 Sign in
