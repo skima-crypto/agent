@@ -215,7 +215,7 @@ export default function HomePage() {
 <header className="w-full flex items-center justify-between py-6">
   <div className="flex items-center gap-3">
     <span className="text-xl font-semibold text-slate-800 dark:text-white">
-      🟦AGENT 714
+      SKIMA
     </span>
     <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 dark:bg-white/5 border border-white/10">
       <span className="text-xs text-blue-200 dark:text-blue-400 font-medium">
@@ -259,9 +259,9 @@ export default function HomePage() {
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.7 }}
-      className="text-4xl sm:text-5xl font-bold text-slate-900 dark:text-white mb-4"
+      className="text-43xl sm:text-5xl font-bold text-slate-900 dark:text-white mb-4"
     >
-      Welcome to <span className="text-blue-500">714 Chat</span>
+      Welcome to <span className="text-blue-500">SKIMA</span>
     </motion.h1>
 
     <motion.p
@@ -290,7 +290,7 @@ export default function HomePage() {
                 Get Started
               </h2>
               <p className="text-sm text-slate-600 dark:text-slate-300">
-                Sign in and explore on-chain chat, tipping, and social fun.
+                Sign in and explore Agent 714 Assistance, on-chain chat, tipping, and social fun.
               </p>
             </div>
 
@@ -362,7 +362,7 @@ export default function HomePage() {
                     onClick={() => router.push("/profile")}
                     className="flex-1 px-5 py-3 rounded-xl border border-white/10 bg-white/5 dark:bg-slate-700 text-slate-900 dark:text-slate-100 hover:opacity-95 transition"
                   >
-                    Open Profile
+                    My Profile
                   </button>
                 </div>
               )}
