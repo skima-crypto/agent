@@ -23,6 +23,17 @@ export default function Footer() {
             target="_blank"
             rel="noopener noreferrer"
             className="text-gray-400 hover:text-blue-400 transition"
+            title="Follow @agent714_"
+          >
+            <Twitter size={20} />
+          </a>
+
+          <a
+            href="https://twitter.com/0xskima"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-gray-400 hover:text-blue-400 transition"
+            title="Follow @0xskima"
           >
             <Twitter size={20} />
           </a>
