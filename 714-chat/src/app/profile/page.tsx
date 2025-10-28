@@ -141,7 +141,7 @@ export default function ProfilePage() {
       if (error) throw error;
 
       alert("Profile updated successfully!");
-      router.push("/dashboard");
+      router.push("/profile");
     } catch (err: any) {
       console.error("Save error:", err);
       alert(err?.message || "Error saving profile");
