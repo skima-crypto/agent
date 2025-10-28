@@ -95,11 +95,40 @@ export default function ProfilePage() {
     }
   };
 
-  // Save profile
+    // Save profile (with username validation)
   const saveProfile = async () => {
     if (!user) return;
     setSaving(true);
+
+    // ✅ username validation
+    if (!username || username.length < 3) {
+      alert("Username must be at least 3 characters long.");
+      setSaving(false);
+      return;
+    }
+
+    if (!/^[a-z0-9_-]+$/.test(username)) {
+  alert("Username can only contain lowercase letters, numbers, underscores (_), and hyphens (-).");
+  setSaving(false);
+  return;
+}
+
+
     try {
+      // ✅ optional: prevent duplicate usernames
+      const { data: existing } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("username", username)
+        .neq("id", user.id)
+        .maybeSingle();
+
+      if (existing) {
+        alert("Username already taken. Please choose another.");
+        setSaving(false);
+        return;
+      }
+
       const updates = {
         id: user.id,
         username,
@@ -108,14 +137,14 @@ export default function ProfilePage() {
         updated_at: new Date(),
       };
 
-      const { error } = await supabase.from('profiles').upsert([updates], { onConflict: 'id' });
+      const { error } = await supabase.from("profiles").upsert([updates], { onConflict: "id" });
       if (error) throw error;
 
-      alert('Profile updated!');
-      router.push('/dashboard');
+      alert("Profile updated successfully!");
+      router.push("/dashboard");
     } catch (err: any) {
-      console.error('Save error:', err);
-      alert(err?.message || 'Error saving profile');
+      console.error("Save error:", err);
+      alert(err?.message || "Error saving profile");
     } finally {
       setSaving(false);
     }
@@ -206,13 +235,22 @@ export default function ProfilePage() {
           </div>
 
           {/* Username */}
-          <input
-            type="text"
-            placeholder="Enter your username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="w-full px-4 py-2 rounded-xl mb-4 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
-          />
+        <input
+  type="text"
+  placeholder="Enter your username"
+  value={username}
+  onChange={(e) => {
+    // remove spaces, force lowercase, allow only a-z 0-9 _ -
+    const clean = e.target.value
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, ""); // remove anything not allowed
+    setUsername(clean);
+  }}
+  className="w-full px-4 py-2 rounded-xl mb-4 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+  pattern="[a-z0-9_-]+"
+  title="Only lowercase letters, numbers, underscores (_) or hyphens (-) are allowed."
+/>
+
 
           {/* Wallet Address */}
           <input
