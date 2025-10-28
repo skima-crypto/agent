@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AGENT 714",
-  description: "Connect. Chat. Have fun — fully onchain",
+  title: "skima",
+  description: "Explore Agent 714. connect. chat. have fun onchain",
   icons: {
     icon: "/favicon.jpg", 
   },
