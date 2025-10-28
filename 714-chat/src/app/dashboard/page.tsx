@@ -353,10 +353,10 @@ export default function HomePage() {
               ) : (
                 <div className="w-full flex flex-col sm:flex-row gap-3">
                   <button
-                    onClick={() => router.push("home")}
+                    onClick={() => router.push("connect")}
                     className="flex-1 px-5 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-500 text-white font-medium shadow hover:opacity-95 transition"
                   >
-                    Enter Chat
+                    Connect
                   </button>
                   <button
                     onClick={() => router.push("/profile")}
