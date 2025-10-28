@@ -19,7 +19,7 @@ import Footer from '@/components/Footer';
 
 /* ====== CONFIG ====== */
 const LOGO_URL = 'https://i.postimg.cc/dQWBNrsH/favicon.jpg';
-const HERO_URL = 'https://i.postimg.cc/t4b28Nt9/714BG.jpg';
+const HERO_URL = 'https://i.postimg.cc/dQWBNrsH/favicon.jpg';
 const FEATURE_CHAT = 'https://i.postimg.cc/wvCr1N1h/chat-interface.png';
 const FEATURE_GIFT = 'https://i.postimg.cc/266ccwZP/ctip.png';
 const FEATURE_AGENT = 'https://i.postimg.cc/L541BCgg/Ai-chat.png';
