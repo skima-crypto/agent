@@ -61,7 +61,6 @@ const Sidebar = () => {
   const navItems = [
     { name: "Home", icon: Home, path: "/" },
     { name: "Profile", icon: User, path: "/profile" },
-    { name: "Chat", icon: MessageCircle, path: "/chat" },
     { name: "Connect", icon: Link2, path: "/connect" }, // 🆕 Added section
   ];
 
@@ -117,13 +116,13 @@ const Sidebar = () => {
                 theme === "dark" ? "text-blue-800" : "text-blue-400"
               }`}
             >
-              AGENT
+              SKIMA
               <span
                 className={
                   theme === "dark" ? "text-blue-900" : "text-blue-600"
                 }
               >
-                -714
+                
               </span>
             </motion.h1>
 
@@ -186,7 +185,7 @@ const Sidebar = () => {
                         theme === "dark" ? "text-blue-700" : "text-blue-400"
                       }
                     />
-                    AI Agent Tools
+                    AGENT 714
                   </span>
                   {aiOpen ? (
                     <ChevronUp

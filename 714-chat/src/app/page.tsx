@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 
 // === Replace these with your own image / logo URLs ===
-const LOGO_BACKGROUND_URL = '/images/logo-bg.svg';
+const LOGO_BACKGROUND_URL = '/images/logo-bg.jpg';
 const HERO_IMAGE_URL = '/images/hero-showcase.png';
 const AGENT_UI_PREVIEW_URL = '/images/agent-ui-preview.png';
 const FEATURES_IMAGE_URL = '/images/features-grid.png';
