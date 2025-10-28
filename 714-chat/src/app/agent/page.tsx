@@ -43,7 +43,7 @@ export default function GeneralAgentPage() {
   useEffect(() => {
     const checkUser = async () => {
       const { data } = await supabase.auth.getUser();
-      if (!data?.user) router.push("/home");
+      if (!data?.user) router.push("/dashboard");
       else setUserId(data.user.id);
       setSessionLoading(false);
     };
@@ -213,7 +213,7 @@ const sendMessage = async () => {
         className={`p-4 border-b ${borderColor} flex items-center justify-between`}
       >
         <button
-          onClick={() => router.push("/home")}
+          onClick={() => router.push("/dashboard")}
           className="flex items-center gap-2 hover:text-blue-500 transition"
         >
           <Home size={22} />

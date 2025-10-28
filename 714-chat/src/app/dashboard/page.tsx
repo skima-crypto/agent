@@ -68,7 +68,7 @@ export default function HomePage() {
 
   const handleGoogleLogin = async () => {
     try {
-      const redirectUrl = `${window.location.origin}/home`;
+      const redirectUrl = `${window.location.origin}/dashboard`;
       await supabase.auth.signInWithOAuth({
         provider: "google",
         options: { redirectTo: redirectUrl },
@@ -92,7 +92,7 @@ export default function HomePage() {
         });
         if (error) return toast.error(error.message);
         toast.success("Signed in! Redirecting...");
-        router.push("/home");
+        router.push("/dashboard");
       }
     } catch (err: any) {
       toast.error("Auth failed: " + (err.message || err));

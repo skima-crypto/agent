@@ -23,7 +23,7 @@ import Footer from '@/components/Footer';
 
 /* ====== CONFIG: Replace these URLs with your own public image URLs ====== */
 const LOGO_URL = 'https://i.postimg.cc/dQWBNrsH/favicon.jpg';
-const HERO_URL = 'https://yourdomain.com/hero.png';
+const HERO_URL = 'https://i.postimg.cc/t4b28Nt9/714BG.jpg';
 const FEATURE_CHAT = 'https://i.postimg.cc/wvCr1N1h/chat-interface.png';
 const FEATURE_GIFT = 'https://i.postimg.cc/266ccwZP/ctip.png';
 const FEATURE_AGENT = 'https://i.postimg.cc/L541BCgg/Ai-chat.png';
@@ -178,7 +178,7 @@ const {
     { label: 'Home', href: '/', Icon: Home },
     { label: 'Connect', href: '/connect', Icon: MessageSquare },
     { label: 'Agent', href: '/agent', Icon: Sparkles },
-    { label: 'Dashboard', href: '/projects', Icon: LayoutDashboard },
+    { label: 'Dashboard', href: '/dashboard', Icon: LayoutDashboard },
   ];
 
   return (
@@ -242,7 +242,7 @@ const {
               ) : (
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => router.push('/home')}
+                    onClick={() => router.push('/dashboard')}
                     className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-400 text-black font-semibold"
                   >
                     Sign in
@@ -350,7 +350,7 @@ const {
                   Try Agent
                 </button>
                 <button
-                  onClick={() => router.push('/home')}
+                  onClick={() => router.push('/dashboard')}
                   className="px-5 py-3 rounded-2xl bg-white/6 text-white border border-white/10"
                 >
                   Enter SKIMA
@@ -449,13 +449,13 @@ const {
             </div>
             <div className="flex gap-3">
               <button
-                onClick={() => router.push('/home')}
+                onClick={() => router.push('/dashboard')}
                 className="px-5 py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-400 text-black font-semibold"
               >
                 Enter SKIMA
               </button>
               <button
-                onClick={() => router.push('/home')}
+                onClick={() => router.push('/dashboard')}
                 className="px-5 py-3 rounded-2xl bg-white/6 border border-white/8 text-white"
               >
                 Sign in

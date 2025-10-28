@@ -116,7 +116,7 @@ export default function ChatPage() {
       const { data } = await supabase.auth.getSession();
       const sessionUser = data.session?.user;
       if (!sessionUser) {
-        window.location.href = "/home";
+        window.location.href = "/dashboard";
         return;
       }
       setUser(sessionUser);

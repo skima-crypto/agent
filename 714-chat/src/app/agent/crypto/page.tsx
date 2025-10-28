@@ -41,7 +41,7 @@ export default function CryptoAgentPage() {
   useEffect(() => {
     const checkUser = async () => {
       const { data } = await supabase.auth.getUser();
-      if (!data?.user) router.push("/home");
+      if (!data?.user) router.push("/dashboard");
       else setUserId(data.user.id);
       setSessionLoading(false);
     };

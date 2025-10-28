@@ -43,7 +43,7 @@ const loadUserAndChats = async () => {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    router.push("/home");
+    router.push("/dashboard");
     return;
   }
 

@@ -108,7 +108,7 @@ export default function DMPage() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        router.push("/home");
+        router.push("/dashboard");
         return;
       }
 

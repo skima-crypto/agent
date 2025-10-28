@@ -31,7 +31,7 @@ export default function ProfilePage() {
     const loadUser = async () => {
       const { data, error } = await supabase.auth.getUser();
       if (error || !data.user) {
-        router.push('/home');
+        router.push('/dashboard');
         return;
       }
 
@@ -112,7 +112,7 @@ export default function ProfilePage() {
       if (error) throw error;
 
       alert('Profile updated!');
-      router.push('/home');
+      router.push('/dashboard');
     } catch (err: any) {
       console.error('Save error:', err);
       alert(err?.message || 'Error saving profile');
