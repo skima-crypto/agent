@@ -191,7 +191,7 @@ export default function HomePage() {
       <div className="flex flex-1">
         <Sidebar />
 
-        <main className="flex-1 lg:ml-64 p-6 pb-20 relative z-10 flex flex-col items-center transition-colors duration-500">
+        <main className="flex-1 lg:ml-64 p-6 pb-40 relative z-10 flex flex-col items-center transition-colors duration-500">
 
 
           <div className="max-w-7xl w-full mx-auto flex flex-col items-center">
