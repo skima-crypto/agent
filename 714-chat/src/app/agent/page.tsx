@@ -13,6 +13,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import CryptoAgentOverlay from "@/components/CryptoAgentOverlay";
 import AgentLoader from "@/components/AgentLoader";
 import ProfileModal from "@/components/ProfileModal";
 import ReactMarkdown from "react-markdown";
@@ -35,6 +36,7 @@ export default function GeneralAgentPage() {
   const [copied, setCopied] = useState<number | null>(null);
   const [mode, setMode] = useState<"general" | "image">("general");
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const [showCrypto, setShowCrypto] = useState(false);
 
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -264,11 +266,12 @@ const sendMessage = async () => {
           🖼️ Image Gen
         </button>
         <button
-          onClick={() => router.push("/agent/crypto")}
-          className="px-4 py-1 rounded-full border border-gray-500 text-gray-400 hover:bg-blue-600 hover:text-white transition"
-        >
-          💰 Crypto Agent
-        </button>
+  onClick={() => setShowCrypto(true)}
+  className="px-4 py-1 rounded-full border border-gray-500 text-gray-400 hover:bg-blue-600 hover:text-white transition"
+>
+  💰 Crypto Agent
+</button>
+
       </div>
 
       {/* Chat Area */}
