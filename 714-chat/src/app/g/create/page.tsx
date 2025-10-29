@@ -58,7 +58,7 @@ export default function CreateGroupPage() {
     setError(null);
 
     try {
-      const res = await fetch("/api/groups/create", {
+      const res = await fetch("/api/group/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
