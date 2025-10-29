@@ -8,18 +8,28 @@ import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import { Loader2 } from "lucide-react";
 
+interface Group {
+  id: string;
+  display_name: string;
+  description?: string;
+  avatar_url?: string;
+  invite_code: string;
+  group_username: string;
+}
+
 export default function GroupInvitePage({
   params,
 }: {
   params: { group_username: string };
 }) {
   const router = useRouter();
-  const [group, setGroup] = useState<any>(null);
+  const [group, setGroup] = useState<Group | null>(null);
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const username = params.group_username;
 
+  // Fetch group data
   useEffect(() => {
     const fetchGroup = async () => {
       const { data, error } = await supabase
@@ -27,16 +37,21 @@ export default function GroupInvitePage({
         .select("*")
         .eq("group_username", username)
         .single();
+
       if (error) setError(error.message);
       else setGroup(data);
       setLoading(false);
     };
+
     fetchGroup();
   }, [username]);
 
+  // Handle join via API route
   const handleJoin = async () => {
+    if (!group) return;
     try {
       setJoining(true);
+
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -45,30 +60,18 @@ export default function GroupInvitePage({
         return;
       }
 
-      const user_id = session.user.id;
-
-      // Check if already a member
-      const { data: existing } = await supabase
-        .from("group_members")
-        .select("id")
-        .eq("group_id", group.id)
-        .eq("user_id", user_id)
-        .maybeSingle();
-
-      if (existing) {
-        router.push(`/g/${username}`);
-        return;
-      }
-
-      const { error } = await supabase.from("group_members").insert({
-        group_id: group.id,
-        user_id,
-        role: "member",
+      // Call our API route securely
+      const res = await fetch("/api/group/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invite_code: group.invite_code }),
       });
 
-      if (error) throw error;
+      const data = await res.json();
 
-      router.push(`/g/${username}`);
+      if (!res.ok) throw new Error(data.error || "Failed to join group");
+
+      router.push(`/g/${data.group.group_username}`);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -76,6 +79,7 @@ export default function GroupInvitePage({
     }
   };
 
+  // --- UI States ---
   if (loading)
     return (
       <div className="flex items-center justify-center h-screen">
@@ -97,13 +101,11 @@ export default function GroupInvitePage({
       </div>
     );
 
+  // --- Page UI ---
   return (
-    <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-900">
-      <Card className="w-full max-w-md p-6 text-center">
+    <div className="flex items-center justify-center min-h-screen bg-white dark:bg-slate-900">
+      <Card className="w-full max-w-md p-6 text-center shadow-lg">
         <CardHeader>
-          <CardTitle className="text-2xl font-bold mb-4">
-            {group.display_name}
-          </CardTitle>
           {group.avatar_url && (
             <div className="flex justify-center mb-4">
               <Image
@@ -115,6 +117,9 @@ export default function GroupInvitePage({
               />
             </div>
           )}
+          <CardTitle className="text-2xl font-bold mb-2 text-slate-900 dark:text-white">
+            {group.display_name}
+          </CardTitle>
         </CardHeader>
 
         <CardContent>
@@ -127,7 +132,7 @@ export default function GroupInvitePage({
           <Button
             onClick={handleJoin}
             disabled={joining}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white transition-all"
           >
             {joining ? (
               <span className="flex items-center justify-center">
