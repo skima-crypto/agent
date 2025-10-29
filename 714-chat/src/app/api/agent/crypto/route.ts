@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { fetchByAddress, fetchMarket, fetchKnowledge } from "@/lib/crypto";
+import { fetchByAddress } from "@/lib/crypto/fetchByAddress";   // ✅ make sure this exists
+import { fetchMarket } from "@/lib/crypto/fetchMarket";
+import { fetchKnowledge } from "@/lib/crypto/fetchKnowledge";
 
 /* -----------------------------------------------
    ✅ Handle GET requests
