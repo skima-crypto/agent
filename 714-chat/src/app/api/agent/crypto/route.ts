@@ -1,36 +1,39 @@
+// src/app/api/crypto/route.ts
 import { NextResponse } from "next/server";
-import { fetchByAddress, fetchMarket, fetchKnowledge } from "@/lib/crypto";
+import { fetchToken } from "@/lib/crypto/fetchToken";
 
 export async function POST(req: Request) {
   try {
     const { query } = await req.json();
-    const trimmed = query?.trim() || "";
+    const trimmed = query?.trim();
 
-    console.log(`🚀 Incoming query: ${trimmed || "market overview"}`);
+    console.log(`🚀 Incoming crypto query: ${trimmed || "market overview"}`);
 
-    // no query → general market summary
     if (!trimmed) {
-      const market = await fetchMarket();
-      return NextResponse.json({ type: "market_summary", data: market });
+      return NextResponse.json({
+        error: "Please enter a token name, symbol, or contract address.",
+      });
     }
 
-    const addressData = await fetchByAddress(trimmed);
-    const marketData = await fetchMarket(trimmed);
-    const knowledge = await fetchKnowledge(trimmed);
+    // main fetch
+    const tokenData = await fetchToken(trimmed);
 
-    const combined = {
+    if (tokenData?.error) {
+      return NextResponse.json(
+        { error: tokenData.error, query: trimmed },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      type: "token_info",
       query: trimmed,
-      ...(addressData || {}),
-      market: marketData || null,
-      knowledge: knowledge || null,
-      updatedAt: new Date().toISOString(),
-    };
-
-    return NextResponse.json(combined);
+      data: tokenData,
+    });
   } catch (err: any) {
     console.error("💥 /api/crypto POST error:", err.message);
     return NextResponse.json(
-      { error: err.message || "Internal API error" },
+      { error: err.message || "Internal server error." },
       { status: 500 }
     );
   }
