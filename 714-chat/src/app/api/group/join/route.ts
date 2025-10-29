@@ -2,16 +2,29 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
 import { supabaseAdmin } from "@/lib/supabaseServer";
 
+/**
+ * POST /api/group/join
+ * Body: { invite_code: string }
+ * Auth: Required
+ */
 export async function POST(req: Request) {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Get the current session
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const user = session.user;
   const body = await req.json();
   const { invite_code } = body;
 
   if (!invite_code)
-    return NextResponse.json({ error: "Missing invite code" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing invite code" },
+      { status: 400 }
+    );
 
   try {
     // ✅ 1. Find group by invite code
@@ -22,9 +35,12 @@ export async function POST(req: Request) {
       .single();
 
     if (groupError || !group)
-      return NextResponse.json({ error: "Invalid invite code" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Invalid invite code" },
+        { status: 404 }
+      );
 
-    // ✅ 2. Check if already a member
+    // ✅ 2. Check if user is already a member
     const { data: existing } = await supabaseAdmin
       .from("group_members")
       .select("id")
@@ -33,9 +49,12 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (existing)
-      return NextResponse.json({ message: "Already a member", group }, { status: 200 });
+      return NextResponse.json(
+        { message: "Already a member", group },
+        { status: 200 }
+      );
 
-    // ✅ 3. Add member
+    // ✅ 3. Add member to group
     const { error: joinError } = await supabaseAdmin
       .from("group_members")
       .insert({
@@ -46,9 +65,15 @@ export async function POST(req: Request) {
 
     if (joinError) throw joinError;
 
-    return NextResponse.json({ message: "Joined group", group }, { status: 200 });
+    return NextResponse.json(
+      { message: "Joined group", group },
+      { status: 200 }
+    );
   } catch (err: any) {
     console.error("Join error:", err);
-    return NextResponse.json({ error: err.message || "Failed to join group" }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message || "Failed to join group" },
+      { status: 500 }
+    );
   }
 }
