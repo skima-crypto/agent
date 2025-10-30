@@ -26,23 +26,29 @@ export default function GroupInvitePage() {
 
   // --- Fetch group info ---
   useEffect(() => {
-    if (!group_username) return;
+  const fetchGroup = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
 
-    const fetchGroup = async () => {
-      const { data, error } = await supabase
-        .from("groups")
-        .select("*")
-        .eq("group_username", group_username)
-        .single();
+    // If no session, allow public fetch only if your policy allows it
+    const supa = session
+      ? await supabase
+      : await supabase; // reuse but note no token attached
 
-      if (error) setError(error.message);
-      else setGroup(data);
+    const { data, error } = await supa
+      .from("groups")
+      .select("*")
+      .eq("group_username", group_username)
+      .single();
 
-      setLoading(false);
-    };
+    if (error) setError(error.message);
+    else setGroup(data);
 
-    fetchGroup();
-  }, [group_username]);
+    setLoading(false);
+  };
+
+  if (group_username) fetchGroup();
+}, [group_username]);
+
 
   // --- Handle join request ---
   const handleJoin = async () => {
@@ -61,10 +67,13 @@ export default function GroupInvitePage() {
       }
 
       const res = await fetch("/api/group/join", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invite_code: group.group_username }),
-      });
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${session.access_token}`,
+  },
+  body: JSON.stringify({ invite_code: group.group_username }),
+});
 
       const data = await res.json();
 
