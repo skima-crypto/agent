@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,58 +13,57 @@ interface Group {
   display_name: string;
   description?: string;
   avatar_url?: string;
-  invite_code: string;
-  group_username: string;
+  group_username: string; // now same as invite code
 }
 
-export default function GroupInvitePage({
-  params,
-}: {
-  params: { group_username: string };
-}) {
+export default function GroupInvitePage() {
   const router = useRouter();
+  const { group_username } = useParams();
   const [group, setGroup] = useState<Group | null>(null);
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const username = params.group_username;
 
-  // Fetch group data
+  // --- Fetch group info ---
   useEffect(() => {
+    if (!group_username) return;
+
     const fetchGroup = async () => {
       const { data, error } = await supabase
         .from("groups")
         .select("*")
-        .eq("group_username", username)
+        .eq("group_username", group_username)
         .single();
 
       if (error) setError(error.message);
       else setGroup(data);
+
       setLoading(false);
     };
 
     fetchGroup();
-  }, [username]);
+  }, [group_username]);
 
-  // Handle join via API route
+  // --- Handle join request ---
   const handleJoin = async () => {
     if (!group) return;
+
     try {
       setJoining(true);
 
       const {
         data: { session },
       } = await supabase.auth.getSession();
+
       if (!session) {
         router.push("/signin");
         return;
       }
 
-      // Call our API route securely
       const res = await fetch("/api/group/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invite_code: group.invite_code }),
+        body: JSON.stringify({ invite_code: group.group_username }),
       });
 
       const data = await res.json();
@@ -79,7 +78,7 @@ export default function GroupInvitePage({
     }
   };
 
-  // --- UI States ---
+  // --- Loading and Error UI ---
   if (loading)
     return (
       <div className="flex items-center justify-center h-screen">
@@ -101,7 +100,7 @@ export default function GroupInvitePage({
       </div>
     );
 
-  // --- Page UI ---
+  // --- Render Invite Page ---
   return (
     <div className="flex items-center justify-center min-h-screen bg-white dark:bg-slate-900">
       <Card className="w-full max-w-md p-6 text-center shadow-lg">
@@ -147,3 +146,6 @@ export default function GroupInvitePage({
     </div>
   );
 }
+
+// ✅ Ensure dynamic rendering so Vercel doesn't prebuild the page
+export const dynamic = "force-dynamic";
