@@ -23,9 +23,9 @@ const HERO_URL = 'https://i.postimg.cc/dQWBNrsH/favicon.jpg';
 const FEATURE_CHAT = 'https://i.postimg.cc/wvCr1N1h/chat-interface.png';
 const FEATURE_GIFT = 'https://i.postimg.cc/266ccwZP/ctip.png';
 const FEATURE_AGENT = 'https://i.postimg.cc/L541BCgg/Ai-chat.png';
-const FEATURE_TRADE = 'https://yourdomain.com/feature-trade.png';
-const FEATURE_DASHBOARD = 'https://yourdomain.com/feature-dashboard.png';
-const FEATURE_COMMUNITY = 'https://yourdomain.com/feature-community.png';
+const FEATURE_TRADE = 'https://i.postimg.cc/VsqsYts0/coming-soon.png';
+const FEATURE_DASHBOARD = 'https://i.postimg.cc/VsqsYts0/coming-soon.png';
+const FEATURE_COMMUNITY = 'https://i.postimg.cc/VsqsYts0/coming-soon.png';
 /* ==================== */
 
 const FEATURES = [
