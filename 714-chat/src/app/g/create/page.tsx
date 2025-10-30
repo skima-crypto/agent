@@ -86,7 +86,7 @@ export default function CreateGroupPage() {
 
     if (!res.ok) throw new Error(data.error || "Failed to create group");
 
-    const link = `${window.location.origin}/invite/${data.group.invite_code}`;
+    const link = `${window.location.origin}/invite/${data.group.group_username}`;
     setInviteLink(link);
   } catch (err: any) {
     console.error(err);
