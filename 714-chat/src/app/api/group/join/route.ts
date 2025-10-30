@@ -1,46 +1,52 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/lib/supabaseServer";
 
-/**
- * POST /api/group/join
- * Body: { invite_code: string }
- * Auth: Required
- */
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
 export async function POST(req: Request) {
-  // Get the current session
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  const authHeader = req.headers.get("Authorization");
+  const token = authHeader?.replace("Bearer ", "");
 
-  if (!session)
+  if (!token) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-  const user = session.user;
+  // ✅ Decode user from token
+  const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+
+  const {
+    data: { user },
+    error: userError,
+  } = await userClient.auth.getUser();
+
+  if (userError || !user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const body = await req.json();
   const { invite_code } = body;
 
-  if (!invite_code)
-    return NextResponse.json(
-      { error: "Missing invite code" },
-      { status: 400 }
-    );
+  if (!invite_code) {
+    return NextResponse.json({ error: "Missing invite code" }, { status: 400 });
+  }
 
   try {
-    // ✅ 1. Find group by invite code
+    // ✅ 1. Find group by group_username (invite)
     const { data: group, error: groupError } = await supabaseAdmin
       .from("groups")
       .select("id, display_name, group_username")
-      .eq("invite_code", invite_code)
+      .eq("group_username", invite_code)
       .single();
 
-    if (groupError || !group)
-      return NextResponse.json(
-        { error: "Invalid invite code" },
-        { status: 404 }
-      );
+    if (groupError || !group) {
+      return NextResponse.json({ error: "Invalid invite" }, { status: 404 });
+    }
 
-    // ✅ 2. Check if user is already a member
+    // ✅ 2. Check if already member
     const { data: existing } = await supabaseAdmin
       .from("group_members")
       .select("id")
@@ -48,13 +54,11 @@ export async function POST(req: Request) {
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (existing)
-      return NextResponse.json(
-        { message: "Already a member", group },
-        { status: 200 }
-      );
+    if (existing) {
+      return NextResponse.json({ message: "Already a member", group }, { status: 200 });
+    }
 
-    // ✅ 3. Add member to group
+    // ✅ 3. Add member
     const { error: joinError } = await supabaseAdmin
       .from("group_members")
       .insert({
@@ -65,15 +69,9 @@ export async function POST(req: Request) {
 
     if (joinError) throw joinError;
 
-    return NextResponse.json(
-      { message: "Joined group", group },
-      { status: 200 }
-    );
+    return NextResponse.json({ message: "Joined group", group }, { status: 200 });
   } catch (err: any) {
     console.error("Join error:", err);
-    return NextResponse.json(
-      { error: err.message || "Failed to join group" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: err.message || "Failed to join group" }, { status: 500 });
   }
 }
