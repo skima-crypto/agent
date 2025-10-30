@@ -1,16 +1,26 @@
 import { NextResponse } from "next/server";
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
+import { createClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/lib/supabaseServer";
 import { nanoid } from "nanoid";
 
 export async function POST(req: Request) {
-  // ✅ Use auth helper to read user session from cookies
-  const supabase = createRouteHandlerClient({ cookies });
+  const authHeader = req.headers.get("authorization");
+  const token = authHeader?.replace("Bearer ", "");
+
+  if (!token) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // ✅ Create a Supabase client for verifying the token
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+
   const {
     data: { user },
     error: userError,
-  } = await supabase.auth.getUser();
+  } = await supabase.auth.getUser(token);
 
   if (userError || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -29,7 +39,6 @@ export async function POST(req: Request) {
   const invite_code = nanoid(8);
 
   try {
-    // ✅ 1. Create group
     const { data: group, error: groupError } = await supabaseAdmin
       .from("groups")
       .insert({
@@ -45,7 +54,6 @@ export async function POST(req: Request) {
 
     if (groupError) throw groupError;
 
-    // ✅ 2. Add creator as admin
     const { error: memberError } = await supabaseAdmin
       .from("group_members")
       .insert({

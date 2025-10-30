@@ -49,41 +49,52 @@ export default function CreateGroupPage() {
   };
 
   const handleCreateGroup = async () => {
-    if (!groupUsername || !displayName) {
-      setError("Group username and display name are required");
-      return;
+  if (!groupUsername || !displayName) {
+    setError("Group username and display name are required");
+    return;
+  }
+
+  setCreating(true);
+  setError(null);
+
+  try {
+    // ✅ Get the Supabase session (with access token)
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+
+    if (sessionError || !session) {
+      throw new Error("You must be signed in to create a group");
     }
 
-    setCreating(true);
-    setError(null);
+    const res = await fetch("/api/group/create", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`, // ✅ attach token
+      },
+      body: JSON.stringify({
+        group_username: groupUsername,
+        display_name: displayName,
+        description,
+        avatar_url: avatarUrl,
+      }),
+    });
 
-    try {
-      const res = await fetch("/api/group/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          group_username: groupUsername,
-          display_name: displayName,
-          description,
-          avatar_url: avatarUrl,
-        }),
-      });
+    const data = await res.json();
 
-      const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to create group");
 
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to create group");
-      }
-
-      const link = `${window.location.origin}/invite/${data.group.invite_code}`;
-      setInviteLink(link);
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message);
-    } finally {
-      setCreating(false);
-    }
-  };
+    const link = `${window.location.origin}/invite/${data.group.invite_code}`;
+    setInviteLink(link);
+  } catch (err: any) {
+    console.error(err);
+    setError(err.message);
+  } finally {
+    setCreating(false);
+  }
+};
 
   return (
     <motion.div
