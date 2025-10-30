@@ -68,6 +68,14 @@ const renderMessageContent = (text: string) => {
 export default function GroupPage() {
   const router = useRouter();
   const { group_username } = useParams<{ group_username: string }>();
+  const [clientReady, setClientReady] = useState(false);
+
+  useEffect(() => {
+    if (group_username) setClientReady(true);
+  }, [group_username]);
+
+  if (!clientReady) return null;
+
   const [group, setGroup] = useState<any | null>(null);
   const [members, setMembers] = useState<any[]>([]);
   const [messages, setMessages] = useState<any[]>([]);
@@ -250,13 +258,20 @@ export default function GroupPage() {
       supabase.removeChannel(msgChannel);
       supabase.removeChannel(reactChannel);
     };
-  }, [group?.id, isMember, messages]);
+}, [group?.id, isMember]); // ✅ remove messages
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  if (messages.length && bottomRef.current) {
+    bottomRef.current.scrollIntoView({ behavior: "smooth" });
+  }
+}, [messages]);
 
-  const currentProfile = members.find((m) => m.id === currentUser?.id) || null;
+
+  const currentProfile =
+  currentUser && members.length
+    ? members.find((m) => m.id === currentUser.id) || null
+    : null;
+
   const isAdmin = currentProfile?.role === "admin" || group?.created_by === currentUser?.id;
 
   const sendMessage = async (type = "text", content = newMessage) => {
@@ -428,12 +443,13 @@ export default function GroupPage() {
               <ArrowLeft size={22} />
             </button>
             <Image
-              src={group.avatar_url || "/default-group.png"}
-              alt="group avatar"
-              width={36}
-              height={36}
-              className="rounded-full border"
-            />
+  src={group?.avatar_url || "/default-group.png"}
+  alt={group?.display_name || "Group"}
+  width={36}
+  height={36}
+  className="rounded-full border"
+/>
+
             <div>
               <h2 className="font-semibold text-lg">{group.display_name}</h2>
               <p className="text-xs text-blue-400">
@@ -484,19 +500,19 @@ export default function GroupPage() {
                 onContextMenu={(e) => handleMessageClick(e, msg.id)}
               >
                 {/* Avatar (click to open profile modal) */}
-                {!isOwn && (
-                  <Image
-                    src={profile.avatar_url || "/default-avatar.png"}
-                    alt={profile.username}
-                    width={36}
-                    height={36}
-                    className="rounded-full cursor-pointer hover:opacity-80"
-                    onClick={() => {
-                      setProfileUserId(msg.sender_id);
-                      setShowProfile(true);
-                    }}
-                  />
-                )}
+               {!isOwn && (
+  <Image
+    src={profile?.avatar_url || "/default-avatar.png"}
+    alt={profile?.username || "Unknown"}
+    width={36}
+    height={36}
+    className="rounded-full cursor-pointer hover:opacity-80"
+    onClick={() => {
+      setProfileUserId(msg.sender_id);
+      setShowProfile(true);
+    }}
+  />
+)}
 
                 {/* Message bubble */}
                 <motion.div
@@ -573,18 +589,19 @@ export default function GroupPage() {
                 </motion.div>
 
                 {isOwn && (
-                  <Image
-                    src={profile.avatar_url || "/default-avatar.png"}
-                    alt={profile.username}
-                    width={36}
-                    height={36}
-                    className="rounded-full cursor-pointer hover:opacity-80"
-                    onClick={() => {
-                      setProfileUserId(msg.sender_id);
-                      setShowProfile(true);
-                    }}
-                  />
-                )}
+  <Image
+    src={profile?.avatar_url || "/default-avatar.png"}
+    alt={profile?.username || "Unknown"}
+    width={36}
+    height={36}
+    className="rounded-full cursor-pointer hover:opacity-80"
+    onClick={() => {
+      setProfileUserId(msg.sender_id);
+      setShowProfile(true);
+    }}
+  />
+)}
+
               </div>
             );
           })}
@@ -682,12 +699,13 @@ export default function GroupPage() {
               }}
             >
               <Image
-                src={m.avatar_url || "/default-avatar.png"}
-                alt={m.username}
-                width={32}
-                height={32}
-                className="rounded-full"
-              />
+  src={m?.avatar_url || "/default-avatar.png"}
+  alt={m?.username || "Unknown"}
+  width={32}
+  height={32}
+  className="rounded-full"
+/>
+
               <div>
                 <p className="font-medium">{m.username}</p>
                 <p className="text-xs text-blue-400">{m.role}</p>
