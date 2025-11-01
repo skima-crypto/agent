@@ -19,6 +19,8 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 
+
+
 const ProfileModal = dynamic(() => import("@/components/ProfileModal"), { ssr: false });
 const ImageViewerModal = dynamic(() => import("@/components/ImageViewerModal"), { ssr: false });
 const VideoViewerModal = dynamic(() => import("@/components/VideoViewerModal"), { ssr: false });
@@ -28,6 +30,10 @@ const VoiceRecorder = dynamic(() => import("@/components/VoiceRecorder"), { ssr:
 
 // Lazy-load emoji picker to prevent SSR issues
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
+
+// ✅ Helper to safely handle Supabase media URLs
+const safeSrc = (url?: string) =>
+  url && url.startsWith("http") ? url : "/default.png";
 
 // Utility: time ago
 const timeAgo = (timestamp: string) => {
@@ -46,8 +52,7 @@ const timeAgo = (timestamp: string) => {
 const urlRegex = /((https?:\/\/|www\.)[^\s/$.?#].[^\s]*)/gi;
 const renderMessageContent = (text: string) => {
   if (!text) return null;
-  const parts = text.split(urlRegex).filter(Boolean);
-  return parts.map((part, idx) => {
+  const parts = text.split(urlRegex).filter(Boolean);  return parts.map((part, idx) => {
     if (part.match(urlRegex)) {
       const href = part.startsWith("http") ? part : `https://${part}`;
       return (
@@ -138,12 +143,20 @@ export default function GroupPage() {
       setGroup(grp);
 
       // check membership
-      const { data: mem } = await supabase
-  .from("group_members")
-  .select("*")
-  .eq("group_id", grp.id)
-  .eq("user_id", user.id)
-  .maybeSingle();
+     let mem = null;
+try {
+  const { data } = await supabase
+    .from("group_members")
+    .select("*")
+    .eq("group_id", grp.id)
+    .eq("user_id", user.id)
+    .single();
+  mem = data;
+} catch {
+  mem = null;
+}
+
+
 
 
       const member = !!mem;
@@ -555,24 +568,28 @@ export default function GroupPage() {
                   {msg.type === "text" && (
                     <div className="break-words">{renderMessageContent(msg.content)}</div>
                   )}
-                  {msg.type === "image" && msg.image_url && (
-                    <Image
-                      src={msg.image_url}
-                      alt="sent image"
-                      width={240}
-                      height={240}
-                      className="rounded-xl mt-1 cursor-pointer"
-                      onClick={() => setShowImage(msg.image_url)}
-                    />
-                  )}
-                  {msg.type === "video" && msg.image_url && (
-                    <video
-                      src={msg.image_url}
-                      controls
-                      className="rounded-xl mt-1 max-h-64 cursor-pointer"
-                      onClick={() => setShowVideo(msg.image_url)}
-                    />
-                  )}
+                 {msg.type === "image" && (
+  <Image
+    src={safeSrc(msg.image_url)}
+    alt="sent image"
+    width={240}
+    height={240}
+    unoptimized
+    className="rounded-xl mt-1 cursor-pointer"
+    onClick={() => setShowImage(safeSrc(msg.image_url))}
+  />
+)}
+
+                  {msg.type === "video" && (
+  <video
+    src={safeSrc(msg.image_url)}
+    controls
+    className="rounded-xl mt-1 max-h-64 cursor-pointer"
+    onClick={() => setShowVideo(safeSrc(msg.image_url))}
+
+  />
+)}
+
                   {msg.type === "audio" && msg.audio_url && (
                     <audio
                       src={msg.audio_url}
@@ -604,11 +621,14 @@ export default function GroupPage() {
                 </motion.div>
 
                 {isOwn && (
-  <Image
-    src={profile?.avatar_url || "/default-avatar.png"}
-    alt={profile?.username || "Unknown"}
-    width={36}
-    height={36}
+ 
+    <Image
+  src={profile?.avatar_url || "/default-avatar.png"}
+  alt={profile?.username || "Unknown"}
+  width={36}
+  height={36}
+  unoptimized
+
     className="rounded-full cursor-pointer hover:opacity-80"
     onClick={() => {
       setProfileUserId(msg.sender_id);
