@@ -139,11 +139,12 @@ export default function GroupPage() {
 
       // check membership
       const { data: mem } = await supabase
-        .from("group_members")
-        .select("*")
-        .eq("group_id", grp.id)
-        .eq("user_id", user.id)
-        .single();
+  .from("group_members")
+  .select("*")
+  .eq("group_id", grp.id)
+  .eq("user_id", user.id)
+  .maybeSingle();
+
 
       const member = !!mem;
       setIsMember(member);
@@ -461,7 +462,7 @@ export default function GroupPage() {
 />
 
             <div>
-              <h2 className="font-semibold text-lg">{group.display_name}</h2>
+              <h2 className="font-semibold text-lg">{group?.display_name || "Group"}</h2>
               <p className="text-xs text-blue-400">
                 {members.length} members
               </p>
@@ -534,15 +535,18 @@ export default function GroupPage() {
                       : "bg-blue-950 text-blue-100 rounded-bl-none"
                   }`}
                 >
-                  {/* Reply preview */}
-                  {msg.reply_to_message && (
+                 
+              {/* Reply preview */}
+{msg.reply_to_message && (
   <div className="text-xs text-blue-300 mb-1 border-l-2 border-blue-500 pl-2">
     Replying to{" "}
     <span className="font-semibold">
-      {profileFor(msg.reply_to_message.sender_id)?.username || "Unknown"}
+      {profileFor(msg.reply_to_message?.sender_id)?.username || "Unknown"}
     </span>
     :{" "}
-    {msg.reply_to_message.content?.slice(0, 50) || "media"}
+    {msg.reply_to_message?.content
+      ? msg.reply_to_message.content.slice(0, 50)
+      : "media"}
   </div>
 )}
 
