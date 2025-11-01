@@ -19,23 +19,19 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 
-
-
+// Dynamic imports
 const ProfileModal = dynamic(() => import("@/components/ProfileModal"), { ssr: false });
 const ImageViewerModal = dynamic(() => import("@/components/ImageViewerModal"), { ssr: false });
 const VideoViewerModal = dynamic(() => import("@/components/VideoViewerModal"), { ssr: false });
 const MessageActionsPopup = dynamic(() => import("@/components/MessageActionsPopup"), { ssr: false });
 const VoiceRecorder = dynamic(() => import("@/components/VoiceRecorder"), { ssr: false });
-
-
-// Lazy-load emoji picker to prevent SSR issues
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
 
-// ✅ Helper to safely handle Supabase media URLs
+// ✅ Safe Supabase URL helper
 const safeSrc = (url?: string) =>
   url && url.startsWith("http") ? url : "/default.png";
 
-// Utility: time ago
+// ✅ Time ago helper
 const timeAgo = (timestamp: string) => {
   const now = new Date();
   const past = new Date(timestamp);
@@ -48,33 +44,38 @@ const timeAgo = (timestamp: string) => {
   return `${Math.floor(diff / 31536000)}y ago`;
 };
 
-// URL detection
-const urlRegex = /((https?:\/\/|www\.)[^\s/$.?#].[^\s]*)/gi;
-const renderMessageContent = (text: string) => {
-  if (!text) return null;
-  const parts = text.split(urlRegex).filter(Boolean);  return parts.map((part, idx) => {
-    if (part.match(urlRegex)) {
-      const href = part.startsWith("http") ? part : `https://${part}`;
-      return (
-        <a
-          key={idx}
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="underline break-words"
-        >
-          {part}
-        </a>
-      );
-    }
-    return <span key={idx}>{part}</span>;
-  });
-};
-
 export default function GroupPage() {
   const router = useRouter();
   const { group_username } = useParams<{ group_username: string }>();
   const [clientReady, setClientReady] = useState(false);
+
+  // ✅ URL detection and JSX-safe rendering function (now inside component)
+  const urlRegex = /((https?:\/\/|www\.)[^\s/$.?#].[^\s]*)/gi;
+
+  const renderMessageContent = (text: string) => {
+    if (!text) return null;
+    const parts = text.split(urlRegex).filter(Boolean);
+    return parts.map((part, idx) => {
+      if (part.match(urlRegex)) {
+        const href = part.startsWith("http") ? part : `https://${part}`;
+        return (
+          <a
+            key={idx}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline break-words"
+          >
+            {part}
+          </a>
+        );
+      }
+      return <span key={idx}>{part}</span>;
+    });
+  };
+
+
+
 
   useEffect(() => {
     if (group_username) setClientReady(true);
