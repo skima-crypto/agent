@@ -715,43 +715,46 @@ try {
         </div>
       </div>
 
-      {/* Members sidebar */}
-      {membersOpen && (
-        <div
-          className={`w-64 border-l ${
-            theme === "dark" ? "border-blue-800 bg-blue-950" : "border-gray-200 bg-white"
-          } overflow-y-auto`}
-        >
-          <h3 className="text-lg font-semibold px-4 py-3 border-b border-blue-800">
-            Members
-          </h3>
-          {members.map((m) => (
-            <div
-              key={m.id}
-              className="flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-blue-800/40"
-              onClick={() => {
-                setProfileUserId(m.id);
-                setShowProfile(true);
-              }}
-            >
-              <Image
-  src={m?.avatar_url || "/default-avatar.png"}
-  alt={m?.username || "Unknown"}
-  width={32}
-  height={32}
-  className="rounded-full"
-/>
+{/* Members sidebar */}
+{membersOpen && (
+  <div
+    className={`w-64 border-l ${
+      theme === "dark"
+        ? "border-blue-800 bg-blue-950"
+        : "border-gray-200 bg-white"
+    } overflow-y-auto`}
+  >
+    <h3 className="text-lg font-semibold px-4 py-3 border-b border-blue-800">
+      Members
+    </h3>
 
-              <div>
-                <p className="font-medium">{m.username}</p>
-                <p className="text-xs text-blue-400">{m.role}</p>
-              </div>
-            </div>
-          ))}
+    {members.map((m) => (
+      <div
+        key={m.id}
+        className="flex items-center gap-3 px-4 py-2 hover:bg-blue-900/40 cursor-pointer"
+        onClick={() => {
+          setProfileUserId(m.id);
+          setShowProfile(true);
+        }}
+      >
+        <Image
+          src={m.avatar_url || "/default-avatar.png"}
+          alt={m.username || "User"}
+          width={32}
+          height={32}
+          className="rounded-full"
+        />
+        <div className="flex flex-col">
+          <span className="font-medium">{m.username || "Unknown"}</span>
+          <span className="text-xs text-blue-400">{m.role}</span>
         </div>
-      )}
+      </div>
+    ))}
+  </div>
+)}
 
-      {/* Action popup */}
+
+           {/* Action popup */}
 {actionPopup.visible && (
   <MessageActionsPopup
     visible={actionPopup.visible}
