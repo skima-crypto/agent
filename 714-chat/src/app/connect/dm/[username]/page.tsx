@@ -569,7 +569,7 @@ const sendMessage = async (type = "text", content = newMessage) => {
         {/* message bubble */}
         <div className={`flex flex-col max-w-[70%]`}>
           
-          {/* 🧩 REPLY PREVIEW (clickable to scroll) */}
+          {/*  REPLY PREVIEW (clickable to scroll) */}
 {repliedMsg && (
   <div
     onClick={() => {
