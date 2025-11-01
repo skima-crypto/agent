@@ -245,12 +245,23 @@ export default function GroupPage() {
         const msg = messages.find((m) => m.id === messageId);
         if (!msg || msg.group_id !== group.id) return;
 
-        const { data: reactionRows } = await supabase
-          .from("group_message_reactions")
-          .select("emoji")
-          .eq("message_id", messageId);
-        const emojis = (reactionRows || []).map((e) => e.emoji);
-        setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, reactions: emojis } : m)));
+        // ✅ FIXED CODE — no direct "messages" reference
+const { data: reactionRows } = await supabase
+  .from("group_message_reactions")
+  .select("emoji, message_id")
+  .eq("message_id", messageId);
+
+if (!reactionRows) return;
+const emojis = reactionRows.map((e) => e.emoji);
+
+setMessages((prev) =>
+  prev.map((m) =>
+    m.id === messageId && m.group_id === group.id
+      ? { ...m, reactions: emojis }
+      : m
+  )
+);
+
       }
     );
     reactChannel.subscribe();
@@ -527,15 +538,16 @@ export default function GroupPage() {
                 >
                   {/* Reply preview */}
                   {msg.reply_to_message && (
-                    <div className="text-xs text-blue-300 mb-1 border-l-2 border-blue-500 pl-2">
-                      Replying to{" "}
-                      <span className="font-semibold">
-                        {profileFor(msg.reply_to_message.sender_id).username}
-                      </span>
-                      :{" "}
-                      {msg.reply_to_message.content?.slice(0, 50) || "media"}
-                    </div>
-                  )}
+  <div className="text-xs text-blue-300 mb-1 border-l-2 border-blue-500 pl-2">
+    Replying to{" "}
+    <span className="font-semibold">
+      {profileFor(msg.reply_to_message.sender_id)?.username || "Unknown"}
+    </span>
+    :{" "}
+    {msg.reply_to_message.content?.slice(0, 50) || "media"}
+  </div>
+)}
+
 
                   {/* Message content */}
                   {msg.type === "text" && (
