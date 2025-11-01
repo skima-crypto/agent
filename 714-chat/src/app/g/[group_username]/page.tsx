@@ -40,13 +40,16 @@ const timeAgo = (timestamp: string) => {
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   if (diff < 2592000) return `${Math.floor(diff / 86400)}d ago`;
-  if (diff < 31536000) return `${Math.floor(diff / 2593600)}mo ago`;
+  if (diff < 31536000) return `${Math.floor(diff / 2592000)}mo ago`;
+
   return `${Math.floor(diff / 31536000)}y ago`;
 };
 
 export default function GroupPage() {
   const router = useRouter();
-  const { group_username } = useParams<{ group_username: string }>();
+  const params = useParams();
+const group_username = params?.group_username as string;
+
   const [clientReady, setClientReady] = useState(false);
 
   // ✅ URL detection and JSX-safe rendering function (now inside component)
@@ -770,7 +773,9 @@ try {
     onCopy={() => {
       const msg = messages.find((m) => m.id === actionPopup.msgId);
       if (msg?.content) {
-        navigator.clipboard.writeText(msg.content);
+        if (typeof navigator !== "undefined" && msg?.content) {
+          navigator.clipboard.writeText(msg.content);
+           }
       }
       setActionPopup({ visible: false, x: 0, y: 0 });
     }}

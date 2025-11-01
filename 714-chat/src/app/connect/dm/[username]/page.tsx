@@ -103,6 +103,7 @@ export default function DMPage() {
 
   // ✅ Session check & load user + friend
   useEffect(() => {
+    
     const loadUser = async () => {
       const {
         data: { user },
