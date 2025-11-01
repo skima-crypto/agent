@@ -206,71 +206,69 @@ export default function GroupPage() {
   }, [group_username, router]);
 
   // Realtime subscriptions (only if member)
-  useEffect(() => {
-    if (!group?.id || !isMember) return;
+ useEffect(() => {
+  if (!group?.id || !isMember) return;
 
-    const msgChannel = supabase.channel(`group-${group.id}-messages`);
-    msgChannel.on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "group_messages", filter: `group_id=eq.${group.id}` },
-      async (payload) => {
-        const msg = payload.new as any;
-        const old = payload.old as any;
+  const msgChannel = supabase.channel(`group-${group.id}-messages`);
+  msgChannel.on(
+    "postgres_changes",
+    { event: "*", schema: "public", table: "group_messages", filter: `group_id=eq.${group.id}` },
+    async (payload) => {
+      const msg = payload.new as any;
+      const old = payload.old as any;
 
+      setMessages((prev) => {
         if (payload.eventType === "INSERT" && msg) {
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === msg.id)) return prev;
-            return [...prev, { ...msg, reactions: [] }];
-          });
+          if (prev.some((m) => m.id === msg.id)) return prev;
+          return [...prev, { ...msg, reactions: [] }];
         } else if (payload.eventType === "UPDATE" && msg) {
-          setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, ...msg } : m)));
+          return prev.map((m) => (m.id === msg.id ? { ...m, ...msg } : m));
         } else if (payload.eventType === "DELETE" && old) {
-          setMessages((prev) => prev.filter((m) => m.id !== old.id));
+          return prev.filter((m) => m.id !== old.id);
         }
-      }
-    );
-    msgChannel.subscribe();
+        return prev;
+      });
+    }
+  );
+  msgChannel.subscribe();
 
-    const reactChannel = supabase.channel(`group-${group.id}-reactions`);
-    reactChannel.on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "group_message_reactions" },
-      async (payload) => {
-        const r = payload.new as any;
-        const old = payload.old as any;
-        const messageId = r?.message_id || old?.message_id;
-        if (!messageId) return;
+  const reactChannel = supabase.channel(`group-${group.id}-reactions`);
+  reactChannel.on(
+    "postgres_changes",
+    { event: "*", schema: "public", table: "group_message_reactions" },
+    async (payload) => {
+      const r = payload.new as any;
+      const old = payload.old as any;
+      const messageId = r?.message_id || old?.message_id;
+      if (!messageId) return;
 
-        // check if message belongs to this group
-        const msg = messages.find((m) => m.id === messageId);
-        if (!msg || msg.group_id !== group.id) return;
+      // fetch updated reactions for this message
+      const { data: reactionRows, error } = await supabase
+        .from("group_message_reactions")
+        .select("emoji, message_id")
+        .eq("message_id", messageId);
 
-        // ✅ FIXED CODE — no direct "messages" reference
-const { data: reactionRows } = await supabase
-  .from("group_message_reactions")
-  .select("emoji, message_id")
-  .eq("message_id", messageId);
+      if (error || !reactionRows) return;
+      const emojis = reactionRows.map((e) => e.emoji);
 
-if (!reactionRows) return;
-const emojis = reactionRows.map((e) => e.emoji);
+      // safe functional update
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId && m.group_id === group.id
+            ? { ...m, reactions: emojis }
+            : m
+        )
+      );
+    }
+  );
+  reactChannel.subscribe();
 
-setMessages((prev) =>
-  prev.map((m) =>
-    m.id === messageId && m.group_id === group.id
-      ? { ...m, reactions: emojis }
-      : m
-  )
-);
+  return () => {
+    supabase.removeChannel(msgChannel);
+    supabase.removeChannel(reactChannel);
+  };
+}, [group?.id, isMember]);
 
-      }
-    );
-    reactChannel.subscribe();
-
-    return () => {
-      supabase.removeChannel(msgChannel);
-      supabase.removeChannel(reactChannel);
-    };
-}, [group?.id, isMember]); // ✅ remove messages
 
   useEffect(() => {
   if (messages.length && bottomRef.current) {
