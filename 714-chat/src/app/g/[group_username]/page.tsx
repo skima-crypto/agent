@@ -19,11 +19,12 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 
-import ProfileModal from "@/components/ProfileModal";
-import ImageViewerModal from "@/components/ImageViewerModal";
-import VideoViewerModal from "@/components/VideoViewerModal";
-import MessageActionsPopup from "@/components/MessageActionsPopup";
-import VoiceRecorder from "@/components/VoiceRecorder";
+const ProfileModal = dynamic(() => import("@/components/ProfileModal"), { ssr: false });
+const ImageViewerModal = dynamic(() => import("@/components/ImageViewerModal"), { ssr: false });
+const VideoViewerModal = dynamic(() => import("@/components/VideoViewerModal"), { ssr: false });
+const MessageActionsPopup = dynamic(() => import("@/components/MessageActionsPopup"), { ssr: false });
+const VoiceRecorder = dynamic(() => import("@/components/VoiceRecorder"), { ssr: false });
+
 
 // Lazy-load emoji picker to prevent SSR issues
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
