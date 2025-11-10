@@ -27,13 +27,6 @@ const MessageActionsPopup = dynamic(() => import("@/components/MessageActionsPop
 const VoiceRecorder = dynamic(() => import("@/components/VoiceRecorder"), { ssr: false });
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
 
-export default function GroupPage() {
-  const router = useRouter();
-  const params = useParams();
-const group_username = params?.group_username as string;
-
-  const [clientReady, setClientReady] = useState(false);
-
 // ✅ Safe Supabase URL helper
 const safeSrc = (url?: string) =>
   url && url.startsWith("http") ? url : "/default.png";
@@ -52,7 +45,12 @@ const timeAgo = (timestamp: string) => {
   return `${Math.floor(diff / 31536000)}y ago`;
 };
 
+export default function GroupPage() {
+  const router = useRouter();
+  const params = useParams();
+const group_username = params?.group_username as string;
 
+  const [clientReady, setClientReady] = useState(false);
 
   // ✅ URL detection and JSX-safe rendering function (now inside component)
   const urlRegex = /((https?:\/\/|www\.)[^\s/$.?#].[^\s]*)/gi;
