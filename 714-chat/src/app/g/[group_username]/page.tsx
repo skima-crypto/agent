@@ -84,7 +84,7 @@ const group_username = params?.group_username as string;
     if (group_username) setClientReady(true);
   }, [group_username]);
 
-  if (!clientReady) return null;
+ 
 
   const [group, setGroup] = useState<any | null>(null);
   const [members, setMembers] = useState<any[]>([]);
@@ -417,6 +417,8 @@ try {
       avatar_url: "/default-avatar.png",
       username: "Unknown",
     };
+
+     if (!clientReady) return null;
 
   // 🚪 Access gate (non-members)
   if (loading)
