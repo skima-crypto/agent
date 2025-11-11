@@ -28,6 +28,7 @@ const VoiceRecorder = dynamic(() => import("@/components/VoiceRecorder"), { ssr:
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
 
 
+
 // ✅ Safe Supabase URL helper
 const safeSrc = (url?: string) =>
   url && url.startsWith("http") ? url : "/default.png";
@@ -52,6 +53,8 @@ export default function GroupPage() {
 const group_username = params?.group_username as string;
 
   const [clientReady, setClientReady] = useState(false);
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+
 
   // ✅ URL detection and JSX-safe rendering function (now inside component)
   const urlRegex = /((https?:\/\/|www\.)[^\s/$.?#].[^\s]*)/gi;
@@ -78,6 +81,29 @@ const group_username = params?.group_username as string;
     });
   };
 
+const handleConfirmedUpload = async (file: File) => {
+  if (!file || !currentUser) return;
+
+  setUploading(true);
+  const ext = file.name.split(".").pop();
+  const path = `group-uploads/${group?.id}/${currentUser.id}-${Date.now()}.${ext}`;
+  const { data, error } = await supabase.storage.from("chat-uploads").upload(path, file);
+
+  if (error) {
+    console.error(error);
+    setUploading(false);
+    return;
+  }
+
+  const { data: publicUrl } = supabase.storage.from("chat-uploads").getPublicUrl(data.path);
+  const url = publicUrl.publicUrl;
+
+  if (file.type.startsWith("video")) await sendMessage("video", url);
+  else await sendMessage("image", url);
+
+  setMediaPreview(null);
+  setUploading(false);
+};
 
 
 
@@ -231,27 +257,47 @@ try {
   if (!group?.id || !isMember) return;
 
   const msgChannel = supabase.channel(`group-${group.id}-messages`);
-  msgChannel.on(
-    "postgres_changes",
-    { event: "*", schema: "public", table: "group_messages", filter: `group_id=eq.${group.id}` },
-    async (payload) => {
-      const msg = payload.new as any;
-      const old = payload.old as any;
+msgChannel.on(
+  "postgres_changes",
+  { event: "*", schema: "public", table: "group_messages", filter: `group_id=eq.${group.id}` },
+  async (payload) => {
+    const msg = payload.new as any;
+    const old = payload.old as any;
 
+    // ✅ FIXED SECTION
+    if (payload.eventType === "INSERT" && msg) {
       setMessages((prev) => {
-        if (payload.eventType === "INSERT" && msg) {
-          if (prev.some((m) => m.id === msg.id)) return prev;
-          return [...prev, { ...msg, reactions: [] }];
-        } else if (payload.eventType === "UPDATE" && msg) {
-          return prev.map((m) => (m.id === msg.id ? { ...m, ...msg } : m));
-        } else if (payload.eventType === "DELETE" && old) {
-          return prev.filter((m) => m.id !== old.id);
-        }
+        if (prev.some((m) => m.id === msg.id)) return prev;
         return prev;
       });
+
+      let replyMessage = null;
+      if (msg.reply_to) {
+        const { data: replyData } = await supabase
+          .from("group_messages")
+          .select("*")
+          .eq("id", msg.reply_to)
+          .single();
+        replyMessage = replyData || null;
+      }
+
+      setMessages((prev) => [
+        ...prev,
+        { ...msg, reactions: [], reply_to_message: replyMessage },
+      ]);
+    } 
+    else if (payload.eventType === "UPDATE" && msg) {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === msg.id ? { ...m, ...msg } : m))
+      );
+    } 
+    else if (payload.eventType === "DELETE" && old) {
+      setMessages((prev) => prev.filter((m) => m.id !== old.id));
     }
-  );
-  msgChannel.subscribe();
+  }
+);
+msgChannel.subscribe();
+
 
   const reactChannel = supabase.channel(`group-${group.id}-reactions`);
   reactChannel.on(
@@ -350,7 +396,15 @@ try {
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
   const file = e.target.files?.[0];
-  if (!file || !currentUser) return;
+  if (!file) return;
+
+  // Create local preview first
+  const previewUrl = URL.createObjectURL(file);
+  setMediaPreview(previewUrl);
+
+  // Stop here if just previewing
+  if (!currentUser) return;
+
 
   setUploading(true); // ⬅️ start loading
 
@@ -516,9 +570,9 @@ try {
               {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
             </button>
           </div>
+          {uploading && <p className="text-xs text-blue-400 px-3">Uploading...</p>}
         </div>
 
-{uploading && <p className="text-xs text-blue-400 px-3">Uploading...</p>}
 
 
         {/* Search bar */}
@@ -535,7 +589,7 @@ try {
         )}
 
         {/* Messages container */}
-        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-3">
+        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-3 mb-24">
           {filteredMessages.map((msg) => {
             const isOwn = msg.sender_id === currentUser?.id;
             const profile = profileFor(msg.sender_id);
@@ -683,6 +737,42 @@ try {
           </div>
         )}
 
+        {/* Media preview before send */}
+{mediaPreview && (
+  <div className="p-2 border-t border-blue-800 bg-blue-950 flex justify-between items-center">
+    <div className="flex items-center gap-3">
+      <Image
+        src={mediaPreview}
+        alt="Preview"
+        width={64}
+        height={64}
+        className="rounded-lg"
+      />
+      <span className="text-sm text-blue-300">Preview ready to send</span>
+    </div>
+    <div className="flex gap-2">
+      <button
+        onClick={() => setMediaPreview(null)}
+        className="text-xs text-red-400 hover:text-red-200"
+      >
+        Cancel
+      </button>
+      <button
+        onClick={async () => {
+          const response = await fetch(mediaPreview);
+          const blob = await response.blob();
+          const file = new File([blob], "upload", { type: blob.type });
+          await handleConfirmedUpload(file);
+        }}
+        className="text-xs text-blue-400 hover:text-blue-200"
+      >
+        Send
+      </button>
+    </div>
+  </div>
+)}
+
+
         {/* Message input */}
         <div
   className={`fixed bottom-0 left-0 right-0 flex items-center gap-2 p-3 border-t ${
@@ -691,16 +781,20 @@ try {
 >
 
         
-          <button onClick={() => fileInputRef.current?.click()}>
-            <Paperclip size={22} />
-          </button>
-          <input
-            type="file"
-            ref={fileInputRef}
-            hidden
-            accept="image/*,video/*"
-            onChange={handleFileUpload}
-          />
+          <div
+  onClick={() => fileInputRef.current?.click()}
+  className="cursor-pointer flex items-center justify-center"
+>
+  <Paperclip size={22} />
+  <input
+    type="file"
+    ref={fileInputRef}
+    accept="image/*,video/*"
+    className="hidden"
+    onChange={handleFileUpload}
+  />
+</div>
+
 
           <button onClick={() => cameraInputRef.current?.click()}>
             <Camera size={22} />
