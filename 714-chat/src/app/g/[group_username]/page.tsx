@@ -405,14 +405,21 @@ const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
   setSelectedFile(file);
 };
 
-const handleSendMedia = async () => {
-  if (!selectedFile) return;
-  await handleConfirmedUpload(selectedFile);
-  setMediaPreview(null);
-  setSelectedFile(null);
+// Replace your current send button logic with this unified one
+const handleUnifiedSend = async () => {
+  // If media is selected → upload first
+  if (selectedFile) {
+    await handleConfirmedUpload(selectedFile);
+    setMediaPreview(null);
+    setSelectedFile(null);
+  }
+
+  // If text is present → send it
+  if (newMessage.trim()) {
+    await sendMessage("text", newMessage);
+    setNewMessage("");
+  }
 };
-
-
 
 
   const handleVoiceUpload = async (file: File) => {
@@ -592,7 +599,8 @@ const handleSendMedia = async () => {
     <Image
       src={profile?.avatar_url || "/default-avatar.png"}
       alt={profile?.username || "Unknown"}
-      width={36}      height={36}
+      width={36}
+      height={36}
       unoptimized
       className="rounded-full cursor-pointer hover:opacity-80"
       onClick={() => {
@@ -600,7 +608,12 @@ const handleSendMedia = async () => {
         setShowProfile(true);
       }}
     />
-    <span className="text-xs text-blue-300">{profile?.username}</span>
+    <span
+  className="text-xs text-blue-300 max-w-[80px] truncate block"
+  title={profile?.username}
+>
+  {profile?.username}
+</span>
   </div>
 )}
 
@@ -735,26 +748,17 @@ const handleSendMedia = async () => {
       alt="preview"
       className="h-16 w-16 object-cover rounded-md"
     />
-    <div className="flex gap-3 items-center">
-      <button
-        onClick={() => {
-          setMediaPreview(null);
-          setSelectedFile(null);
-        }}
-        className="text-xs text-red-400 hover:text-red-200"
-      >
-        Cancel
-      </button>
-      <button
-        onClick={handleSendMedia}
-        className="text-xs text-blue-400 hover:text-blue-200"
-      >
-        Send
-      </button>
-    </div>
+    <button
+      onClick={() => {
+        setMediaPreview(null);
+        setSelectedFile(null);
+      }}
+      className="text-xs text-red-400 hover:text-red-200"
+    >
+      Cancel
+    </button>
   </div>
 )}
-
 
 
         {/* Message input */}
@@ -796,25 +800,26 @@ const handleSendMedia = async () => {
 
 
           <input
-            ref={messageInputRef}
-            type="text"
-            placeholder="Type a message..."
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-            className={`flex-1 px-3 py-2 rounded-md outline-none ${
-              theme === "dark"
-                ? "bg-blue-950 text-blue-100"
-                : "bg-gray-100 text-slate-900"
-            }`}
-          />
-          <button
-            onClick={() => sendMessage()}
-            className="bg-blue-700 hover:bg-blue-600 text-white rounded-md p-2"
-          >
-            <Send size={18} />
-            
-          </button>
+  ref={messageInputRef}
+  type="text"
+  placeholder="Type a message..."
+  value={newMessage}
+  onChange={(e) => setNewMessage(e.target.value)}
+  onKeyDown={(e) => e.key === "Enter" && handleUnifiedSend()}
+  className={`flex-1 px-3 py-2 rounded-md outline-none ${
+    theme === "dark"
+      ? "bg-blue-950 text-blue-100"
+      : "bg-gray-100 text-slate-900"
+  }`}
+/>
+
+<button
+  onClick={handleUnifiedSend}
+  className="bg-blue-700 hover:bg-blue-600 text-white rounded-md p-2"
+>
+  <Send size={18} />
+</button>
+
         </div>
       </div>
 
