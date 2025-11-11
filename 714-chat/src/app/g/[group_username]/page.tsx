@@ -54,6 +54,8 @@ const group_username = params?.group_username as string;
 
   const [clientReady, setClientReady] = useState(false);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
 
 
   // ✅ URL detection and JSX-safe rendering function (now inside component)
@@ -398,13 +400,18 @@ const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
   const file = e.target.files?.[0];
   if (!file) return;
 
-  // ✅ Show local preview immediately — don't upload yet
   const previewUrl = URL.createObjectURL(file);
   setMediaPreview(previewUrl);
-
-  // ✅ Temporarily store the file for later sending
-  (fileInputRef.current as any).selectedFile = file;
+  setSelectedFile(file);
 };
+
+const handleSendMedia = async () => {
+  if (!selectedFile) return;
+  await handleConfirmedUpload(selectedFile);
+  setMediaPreview(null);
+  setSelectedFile(null);
+};
+
 
 
 
@@ -580,14 +587,12 @@ const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
                 onContextMenu={(e) => handleMessageClick(e, msg.id)}
               >
                 {/* Avatar (click to open profile modal) */}
-              {isOwn && (
+              {!isOwn && (
   <div className="flex items-center gap-2">
-    <span className="text-xs text-blue-300">{profile?.username}</span>
     <Image
       src={profile?.avatar_url || "/default-avatar.png"}
       alt={profile?.username || "Unknown"}
-      width={36}
-      height={36}
+      width={36}      height={36}
       unoptimized
       className="rounded-full cursor-pointer hover:opacity-80"
       onClick={() => {
@@ -595,8 +600,10 @@ const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         setShowProfile(true);
       }}
     />
+    <span className="text-xs text-blue-300">{profile?.username}</span>
   </div>
 )}
+
 
 
                 {/* Message bubble */}
@@ -722,31 +729,24 @@ const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
 
         {/* Media preview before send */}
 {mediaPreview && (
-  <div className="p-2 border-t border-blue-800 bg-blue-950 flex justify-between items-center">
-    <div className="flex items-center gap-3">
-      <Image
-        src={mediaPreview}
-        alt="Preview"
-        width={64}
-        height={64}
-        className="rounded-lg"
-      />
-      <span className="text-sm text-blue-300">Preview ready to send</span>
-    </div>
-    <div className="flex gap-2">
+  <div className="fixed bottom-16 left-0 right-0 p-2 border-t border-blue-800 bg-blue-950 flex justify-between items-center z-50">
+    <img
+      src={mediaPreview}
+      alt="preview"
+      className="h-16 w-16 object-cover rounded-md"
+    />
+    <div className="flex gap-3 items-center">
       <button
-        onClick={() => setMediaPreview(null)}
+        onClick={() => {
+          setMediaPreview(null);
+          setSelectedFile(null);
+        }}
         className="text-xs text-red-400 hover:text-red-200"
       >
         Cancel
       </button>
       <button
-        onClick={async () => {
-          const response = await fetch(mediaPreview);
-          const blob = await response.blob();
-          const file = new File([blob], "upload", { type: blob.type });
-          await handleConfirmedUpload(file);
-        }}
+        onClick={handleSendMedia}
         className="text-xs text-blue-400 hover:text-blue-200"
       >
         Send
@@ -754,6 +754,7 @@ const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     </div>
   </div>
 )}
+
 
 
         {/* Message input */}
