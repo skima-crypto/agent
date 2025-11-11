@@ -166,7 +166,7 @@ const handleGlobalSearch = async (query: string) => {
   };
 
   const openGroup = (groupUsername: string) => {
-    router.push(`/connect/g/${groupUsername}`);
+    router.push(/g/${groupUsername}`);
   };
 
   return (
