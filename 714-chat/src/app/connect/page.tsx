@@ -161,8 +161,6 @@ const handleGlobalSearch = async (query: string) => {
   setGroupResults(groups || []);
 }; // ✅ this was missing
 
-
-
   const openChat = (username: string) => {
     router.push(`/connect/dm/${username}`);
   };

@@ -43,7 +43,7 @@ export default function GroupConnect() {
     // Fetch user profile
     const { data: profile } = await supabase
       .from("profiles")
-      .select("*")
+      .select("id, group_username, display_name, avatar_url, description, created_by")
       .eq("id", user.id)
       .single();
 
