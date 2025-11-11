@@ -8,11 +8,23 @@ import Image from "next/image";
 import Sidebar from "@/components/Sidebar";
 import { motion } from "framer-motion";
 
+// ✅ NEW
+import GroupConnect from "./group";
+
 interface Profile {
   id: string;
   username: string;
   avatar_url: string;
   online?: boolean;
+}
+
+interface Group {
+  id: string;
+  group_username: string;
+  display_name: string;
+  avatar_url: string | null;
+  description: string | null;
+  created_by: string;
 }
 
 interface ChatPreview {
@@ -23,11 +35,17 @@ interface ChatPreview {
 }
 
 export default function ConnectPage() {
+  const [section, setSection] = useState<"chats" | "groups">("chats");
+
   const [friends, setFriends] = useState<ChatPreview[]>([]);
-  const [searchResults, setSearchResults] = useState<Profile[]>([]);
-  const [globalSearch, setGlobalSearch] = useState("");
-  const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
+
+  // ✅ Global search
+  const [globalSearch, setGlobalSearch] = useState("");
+  const [userResults, setUserResults] = useState<Profile[]>([]);
+  const [groupResults, setGroupResults] = useState<Group[]>([]);
+
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
@@ -35,31 +53,33 @@ export default function ConnectPage() {
     subscribeToPresence();
   }, []);
 
-  // ✅ Fetch user profile and all people you’ve chatted with
-const loadUserAndChats = async () => {
-  setLoading(true);
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // ✅ Fetch user + chats
+  const loadUserAndChats = async () => {
+    setLoading(true);
 
-  if (!user) {
-    router.push("/dashboard");
-    return;
-  }
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  // get current user profile
-  const { data: userProfile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single();
-  setCurrentUser(userProfile);
+    if (!user) {
+      router.push("/dashboard");
+      return;
+    }
 
-  // 🧠 find all users you’ve chatted with
-  const { data: messages, error } = await supabase
-    .from("direct_messages")
-    .select(
-      `
+    // fetch user profile
+    const { data: userProfile } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single();
+
+    setCurrentUser(userProfile);
+
+    // fetch all messages involving user
+    const { data: messages } = await supabase
+      .from("direct_messages")
+      .select(
+        `
       id,
       sender_id,
       receiver_id,
@@ -68,219 +88,255 @@ const loadUserAndChats = async () => {
       created_at,
       sender:sender_id ( id, username, avatar_url ),
       receiver:receiver_id ( id, username, avatar_url )
-    `
-    )
-    .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-    .order("created_at", { ascending: false });
+      `
+      )
+      .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+      .order("created_at", { ascending: false });
 
-  if (error) {
-    console.error("Chat load failed:", error.message);
+    const chatMap: Record<string, ChatPreview> = {};
+
+    for (const msg of messages || []) {
+      const sender = Array.isArray(msg.sender) ? msg.sender[0] : msg.sender;
+      const receiver = Array.isArray(msg.receiver) ? msg.receiver[0] : msg.receiver;
+
+      const isSender = msg.sender_id === user.id;
+      const friend = isSender ? receiver : sender;
+
+      if (!friend) continue;
+
+      if (!chatMap[friend.id]) {
+        chatMap[friend.id] = {
+          id: friend.id,
+          friend,
+          lastMessage:
+            msg.type === "text"
+              ? msg.content
+              : msg.type === "image"
+              ? "📷 Photo"
+              : msg.type === "audio"
+              ? "🎤 Audio"
+              : msg.type === "video"
+              ? "🎞️ Video"
+              : "Message",
+          unreadCount: 0,
+        };
+      }
+    }
+
+    setFriends(Object.values(chatMap));
     setLoading(false);
+  };
+
+  // ✅ Presence tracking
+  const subscribeToPresence = async () => {
+    supabase.channel("presence").subscribe();
+  };
+
+// ✅ GLOBAL SEARCH: Users + Groups
+const handleGlobalSearch = async (query: string) => {
+  setGlobalSearch(query);
+
+  if (query.trim().length < 2) {
+    setUserResults([]);
+    setGroupResults([]);
     return;
   }
 
-  // 🔎 group messages by the other user
-  const chatMap: Record<string, ChatPreview> = {};
+  // 🔎 search profiles
+  const { data: users } = await supabase
+    .from("profiles")
+    .select("id, username, avatar_url")
+    .ilike("username", `%${query}%`)
+    .limit(20);
 
-  for (const msg of messages) {
-    // 🧩 handle array responses safely
-    const sender = Array.isArray(msg.sender) ? msg.sender[0] : msg.sender;
-    const receiver = Array.isArray(msg.receiver) ? msg.receiver[0] : msg.receiver;
-    const isSender = msg.sender_id === user.id;
+  setUserResults(users || []);
 
-    const friend = isSender ? receiver : sender;
-    if (!friend) continue;
+  // 🔎 search groups
+  const { data: groups } = await supabase
+    .from("groups")
+    .select("id, group_username, display_name, avatar_url, created_by, description")
+    .ilike("display_name", `%${query}%`)
+    .limit(20);
 
-    if (!chatMap[friend.id]) {
-      chatMap[friend.id] = {
-        id: friend.id,
-        friend: {
-          id: friend.id,
-          username: friend.username,
-          avatar_url: friend.avatar_url,
-        },
-        lastMessage:
-          msg.type === "text"
-            ? msg.content
-            : msg.type === "image"
-            ? "📷 Photo"
-            : msg.type === "audio"
-            ? "🎤 Audio"
-            : msg.type === "video"
-            ? "🎞️ Video"
-            : "Message",
-        unreadCount: 0,
-      };
-    }
-  }
-
-  const chats = Object.values(chatMap);
-  setFriends(chats);
-  setLoading(false);
-};
+  setGroupResults(groups || []);
+}; // ✅ this was missing
 
 
-  // ✅ Presence tracking (realtime online/offline)
-  const subscribeToPresence = async () => {
-    const channel = supabase.channel("presence");
 
-    channel
-      .on("presence", { event: "sync" }, () => {
-        console.log("Presence updated");
-      })
-      .subscribe(async (status) => {
-        console.log("Realtime status:", status);
-      });
+  const openChat = (username: string) => {
+    router.push(`/connect/dm/${username}`);
   };
 
-  // ✅ Search users globally by username
-  const handleGlobalSearch = async (query: string) => {
-    setGlobalSearch(query);
-    if (query.trim().length < 2) {
-      setSearchResults([]);
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id, username, avatar_url")
-      .ilike("username", `%${query}%`)
-      .limit(20);
-
-    if (error) {
-      console.warn("Search error:", error.message);
-      return;
-    }
-
-    setSearchResults(data);
+  const openGroup = (groupUsername: string) => {
+    router.push(`/connect/group/${groupUsername}`);
   };
-
-  const handleOpenChat = (friendUsername: string) => {
-  router.push(`/connect/dm/${friendUsername}`);
-};
-
 
   return (
     <div className="flex min-h-screen bg-gradient-to-b from-blue-950 to-blue-900 text-blue-100">
       <Sidebar />
 
-      {/* MAIN CONTENT */}
       <main className="flex-1 overflow-y-auto px-6 py-8 lg:ml-64">
+
         <h1 className="text-3xl font-extrabold mb-6 text-white tracking-tight">
-          Connect & Chat
+          Connect
         </h1>
 
-        {/* Search bar */}
+        {/* ✅ Section Tabs */}
+        <div className="flex gap-4 mb-6">
+          <button
+            onClick={() => setSection("chats")}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition 
+            ${section === "chats" ? "bg-blue-700 text-white" : "bg-blue-950/40"}`}
+          >
+            Chats
+          </button>
+
+          <button
+            onClick={() => setSection("groups")}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition 
+            ${section === "groups" ? "bg-blue-700 text-white" : "bg-blue-950/40"}`}
+          >
+            Groups
+          </button>
+        </div>
+
+        {/* ✅ Global Search */}
         <div className="relative mb-8">
           <input
             type="text"
             value={globalSearch}
             onChange={(e) => handleGlobalSearch(e.target.value)}
-            placeholder="Search by username..."
+            placeholder="Search users or groups..."
             className="w-full rounded-xl bg-blue-950/40 border border-blue-700/30 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 placeholder:text-blue-300"
           />
           <Search className="absolute right-4 top-3.5 text-blue-400" size={18} />
         </div>
 
-        {/* Search Results */}
+        {/* ✅ GLOBAL SEARCH RESULTS */}
         {globalSearch.length > 1 && (
-          <div className="mb-10">
-            <h2 className="text-lg font-semibold text-blue-300 mb-3">
-              Global Search Results
-            </h2>
-            {searchResults.length > 0 ? (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {searchResults.map((user) => (
-                  <motion.div
-                    key={user.id}
-                    whileHover={{ scale: 1.02 }}
-                    className="flex items-center justify-between bg-blue-950/40 border border-blue-700/40 rounded-xl p-4 hover:bg-blue-800/40 transition cursor-pointer"
-                    onClick={() => handleOpenChat(user.username)}
+          <div className="mb-10 space-y-8">
+            {/* Users */}
+            <div>
+              <h2 className="text-lg font-semibold text-blue-300 mb-2">
+                Users
+              </h2>
 
+              {userResults.length > 0 ? (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {userResults.map((u) => (
+                    <motion.div
+                      key={u.id}
+                      whileHover={{ scale: 1.02 }}
+                      className="flex items-center justify-between p-4 bg-blue-950/40 border border-blue-700/40 rounded-xl hover:bg-blue-800/40 cursor-pointer"
+                      onClick={() => openChat(u.username)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Image
+                          src={u.avatar_url || "/default-avatar.png"}
+                          width={40}
+                          height={40}
+                          alt={u.username}
+                          className="rounded-full"
+                        />
+                        <span>{u.username}</span>
+                      </div>
+                      <span className="text-xs text-blue-400">Chat</span>
+                    </motion.div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-blue-300 italic">No matching users.</p>
+              )}
+            </div>
+
+            {/* Groups */}
+            <div>
+              <h2 className="text-lg font-semibold text-blue-300 mb-2">
+                Groups
+              </h2>
+
+              {groupResults.length > 0 ? (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {groupResults.map((g) => (
+                    <motion.div
+                      key={g.id}
+                      whileHover={{ scale: 1.02 }}
+                      className="flex items-center justify-between p-4 bg-blue-950/40 border border-blue-700/40 rounded-xl hover:bg-blue-800/40 cursor-pointer"
+                      onClick={() => openGroup(g.group_username)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Image
+                          src={g.avatar_url || "/default-group.png"}
+                          width={40}
+                          height={40}
+                          alt={g.display_name}
+                          className="rounded-xl"
+                        />
+                        <span>{g.display_name}</span>
+                      </div>
+                      <span className="text-xs text-blue-400">Open</span>
+                    </motion.div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-blue-300 italic">No matching groups.</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ✅ MAIN SECTIONS */}
+        {section === "chats" && (
+          <div>
+            <h2 className="text-lg font-semibold text-blue-300 mb-3">
+              Recent Chats
+            </h2>
+
+            {loading ? (
+              <div className="flex justify-center mt-10">
+                <Loader2 className="animate-spin text-blue-400" size={28} />
+              </div>
+            ) : friends.length > 0 ? (
+              <div className="space-y-3">
+                {friends.map((chat) => (
+                  <motion.div
+                    key={chat.id}
+                    whileHover={{ scale: 1.02 }}
+                    className="flex items-center justify-between p-4 bg-blue-950/40 border border-blue-700/40 rounded-xl hover:bg-blue-800/40 cursor-pointer"
+                    onClick={() => openChat(chat.friend.username)}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-4">
                       <Image
-                        src={user.avatar_url || "/default-avatar.png"}
-                        alt={user.username}
-                        width={40}
-                        height={40}
-                        className="rounded-full border border-blue-500/30"
+                        src={chat.friend.avatar_url || "/default-avatar.png"}
+                        width={50}
+                        height={50}
+                        alt={chat.friend.username}
+                        className="rounded-full"
                       />
-                      <span className="font-medium">{user.username}</span>
+                      <div>
+                        <p className="font-semibold text-white text-sm">
+                          {chat.friend.username}
+                        </p>
+                        <p className="text-xs text-blue-300 truncate w-40">
+                          {chat.lastMessage}
+                        </p>
+                      </div>
                     </div>
-                    <span className="text-xs text-blue-400">Connect</span>
+                    {chat.unreadCount > 0 && (
+                      <span className="bg-blue-600 text-white text-xs px-2 py-1 rounded-full">
+                        {chat.unreadCount}
+                      </span>
+                    )}
                   </motion.div>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-blue-300 italic">
-                No users found matching “{globalSearch}”
-              </p>
+              <p className="text-blue-300 italic">You haven't chatted yet.</p>
             )}
           </div>
         )}
 
-        {/* Recent chats */}
-        <div>
-          <h2 className="text-lg font-semibold text-blue-300 mb-3">
-  Chats
-</h2>
-
-          {loading ? (
-            <div className="flex items-center justify-center mt-10">
-              <Loader2 className="animate-spin text-blue-400" size={28} />
-            </div>
-          ) : friends.length > 0 ? (
-            <div className="space-y-3">
-              {friends.map((chat) => (
-                <motion.div
-                  key={chat.id}
-                  whileHover={{ scale: 1.02 }}
-                  onClick={() => handleOpenChat(chat.friend.username)}
-
-                  className="flex items-center justify-between bg-blue-950/40 border border-blue-700/40 rounded-xl p-4 hover:bg-blue-800/40 transition cursor-pointer"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="relative">
-                      <Image
-                        src={chat.friend.avatar_url || "/default-avatar.png"}
-                        alt={chat.friend.username}
-                        width={50}
-                        height={50}
-                        className="rounded-full border border-blue-500/40"
-                      />
-                      <span
-                        className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border border-blue-950 ${
-                          chat.friend.online
-                            ? "bg-green-400 animate-pulse"
-                            : "bg-gray-500"
-                        }`}
-                      />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-white text-sm">
-                        {chat.friend.username}
-                      </p>
-                      <p className="text-xs text-blue-300 truncate w-40">
-                        {chat.lastMessage}
-                      </p>
-                    </div>
-                  </div>
-
-                  {chat.unreadCount > 0 && (
-                    <span className="bg-blue-600 text-white text-xs px-2 py-1 rounded-full">
-                      {chat.unreadCount}
-                    </span>
-                  )}
-                </motion.div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-blue-300 italic mt-6">
-              You haven’t chatted with anyone yet.
-            </p>
-          )}
-        </div>
+        {section === "groups" && <GroupConnect />}
       </main>
     </div>
   );
