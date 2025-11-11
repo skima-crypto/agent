@@ -27,6 +27,7 @@ const MessageActionsPopup = dynamic(() => import("@/components/MessageActionsPop
 const VoiceRecorder = dynamic(() => import("@/components/VoiceRecorder"), { ssr: false });
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
 
+
 // ✅ Safe Supabase URL helper
 const safeSrc = (url?: string) =>
   url && url.startsWith("http") ? url : "/default.png";
@@ -101,6 +102,8 @@ const group_username = params?.group_username as string;
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [searchMode, setSearchMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [uploading, setUploading] = useState(false);
+
   const [actionPopup, setActionPopup] = useState<{ visible: boolean; x: number; y: number; msgId?: string }>({
     visible: false,
     x: 0,
@@ -346,20 +349,32 @@ try {
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !currentUser) return;
-    const ext = file.name.split(".").pop();
-    const path = `group-uploads/${group?.id}/${currentUser.id}-${Date.now()}.${ext}`;
-    const { data, error } = await supabase.storage.from("chat-uploads").upload(path, file);
-    if (error) return console.error(error);
+  const file = e.target.files?.[0];
+  if (!file || !currentUser) return;
 
-    const { data: publicUrl } = supabase.storage.from("chat-uploads").getPublicUrl(data.path);
-    const url = publicUrl.publicUrl;
-    if (file.type.startsWith("video")) await sendMessage("video", url);
-    else if (file.type.startsWith("audio")) await sendMessage("audio", url);
-    else await sendMessage("image", url);
-    e.target.value = "";
-  };
+  setUploading(true); // ⬅️ start loading
+
+  const ext = file.name.split(".").pop();
+  const path = `group-uploads/${group?.id}/${currentUser.id}-${Date.now()}.${ext}`;
+  const { data, error } = await supabase.storage.from("chat-uploads").upload(path, file);
+
+  if (error) {
+    console.error(error);
+    setUploading(false); // ⬅️ stop on error
+    return;
+  }
+
+  const { data: publicUrl } = supabase.storage.from("chat-uploads").getPublicUrl(data.path);
+  const url = publicUrl.publicUrl;
+
+  if (file.type.startsWith("video")) await sendMessage("video", url);
+  else if (file.type.startsWith("audio")) await sendMessage("audio", url);
+  else await sendMessage("image", url);
+
+  e.target.value = "";
+  setUploading(false); // ⬅️ stop loading after done
+};
+
 
   const handleVoiceUpload = async (file: File) => {
     if (!currentUser) return;
@@ -502,6 +517,9 @@ try {
             </button>
           </div>
         </div>
+
+{uploading && <p className="text-xs text-blue-400 px-3">Uploading...</p>}
+
 
         {/* Search bar */}
         {searchMode && (
@@ -667,10 +685,12 @@ try {
 
         {/* Message input */}
         <div
-          className={`flex items-center gap-2 p-3 border-t ${
-            theme === "dark" ? "border-blue-800" : "border-gray-200"
-          }`}
-        >
+  className={`fixed bottom-0 left-0 right-0 flex items-center gap-2 p-3 border-t ${
+    theme === "dark" ? "border-blue-800 bg-blue-950" : "border-gray-200 bg-white"
+  }`}
+>
+
+        
           <button onClick={() => fileInputRef.current?.click()}>
             <Paperclip size={22} />
           </button>
@@ -694,9 +714,8 @@ try {
             onChange={handleFileUpload}
           />
 
-          <button>
-            <Mic size={22} />
-          </button>
+          <VoiceRecorder onRecorded={handleVoiceUpload} />
+
 
           <input
             ref={messageInputRef}
@@ -716,46 +735,88 @@ try {
             className="bg-blue-700 hover:bg-blue-600 text-white rounded-md p-2"
           >
             <Send size={18} />
+            
           </button>
         </div>
       </div>
 
 {/* Members sidebar */}
 {membersOpen && (
-  <div
-    className={`w-64 border-l ${
-      theme === "dark"
-        ? "border-blue-800 bg-blue-950"
-        : "border-gray-200 bg-white"
-    } overflow-y-auto`}
-  >
-    <h3 className="text-lg font-semibold px-4 py-3 border-b border-blue-800">
-      Members
-    </h3>
-
-    {members.map((m) => (
-      <div
-        key={m.id}
-        className="flex items-center gap-3 px-4 py-2 hover:bg-blue-900/40 cursor-pointer"
-        onClick={() => {
-          setProfileUserId(m.id);
-          setShowProfile(true);
-        }}
-      >
-        <Image
-          src={m.avatar_url || "/default-avatar.png"}
-          alt={m.username || "User"}
-          width={32}
-          height={32}
-          className="rounded-full"
-        />
-        <div className="flex flex-col">
-          <span className="font-medium">{m.username || "Unknown"}</span>
-          <span className="text-xs text-blue-400">{m.role}</span>
+  <>
+    {/* Desktop sidebar */}
+    <div
+      className={`hidden md:block w-64 border-l ${
+        theme === "dark"
+          ? "border-blue-800 bg-blue-950"
+          : "border-gray-200 bg-white"
+      } overflow-y-auto`}
+    >
+      <h3 className="text-lg font-semibold px-4 py-3 border-b border-blue-800">
+        Members
+      </h3>
+      {members.map((m) => (
+        <div
+          key={m.id}
+          className="flex items-center gap-3 px-4 py-2 hover:bg-blue-900/40 cursor-pointer"
+          onClick={() => {
+            setProfileUserId(m.id);
+            setShowProfile(true);
+          }}
+        >
+          <Image
+            src={m.avatar_url || "/default-avatar.png"}
+            alt={m.username || "User"}
+            width={32}
+            height={32}
+            className="rounded-full"
+          />
+          <div className="flex flex-col">
+            <span className="font-medium">{m.username || "Unknown"}</span>
+            <span className="text-xs text-blue-400">{m.role}</span>
+          </div>
         </div>
+      ))}
+    </div>
+
+    {/* Mobile modal overlay */}
+    <div className="fixed inset-0 bg-black/60 flex md:hidden z-50">
+      <div
+        className={`w-full bg-blue-950 rounded-t-2xl p-4 overflow-y-auto`}
+      >
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-lg font-semibold text-blue-100">Members</h3>
+          <button
+            onClick={() => setMembersOpen(false)}
+            className="text-blue-300 hover:text-white text-xl"
+          >
+            ×
+          </button>
+        </div>
+        {members.map((m) => (
+          <div
+            key={m.id}
+            className="flex items-center gap-3 px-2 py-2 hover:bg-blue-900/40 rounded-lg cursor-pointer"
+            onClick={() => {
+              setProfileUserId(m.id);
+              setShowProfile(true);
+            }}
+          >
+            <Image
+              src={m.avatar_url || "/default-avatar.png"}
+              alt={m.username || "User"}
+              width={32}
+              height={32}
+              className="rounded-full"
+            />
+            <div>
+              <p className="font-medium">{m.username}</p>
+              <p className="text-xs text-blue-400">{m.role}</p>
+            </div>
+          </div>
+        ))}
       </div>
-    ))}
-  </div>
+    </div>
+  </>
 )}
 
 
