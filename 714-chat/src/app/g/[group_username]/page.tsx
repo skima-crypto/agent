@@ -394,40 +394,18 @@ msgChannel.subscribe();
     setMessages((p) => p.map((m) => (m.id === optimistic.id ? { ...inserted, reactions: [] } : m)));
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
   const file = e.target.files?.[0];
   if (!file) return;
 
-  // Create local preview first
+  // ✅ Show local preview immediately — don't upload yet
   const previewUrl = URL.createObjectURL(file);
   setMediaPreview(previewUrl);
 
-  // Stop here if just previewing
-  if (!currentUser) return;
-
-
-  setUploading(true); // ⬅️ start loading
-
-  const ext = file.name.split(".").pop();
-  const path = `group-uploads/${group?.id}/${currentUser.id}-${Date.now()}.${ext}`;
-  const { data, error } = await supabase.storage.from("chat-uploads").upload(path, file);
-
-  if (error) {
-    console.error(error);
-    setUploading(false); // ⬅️ stop on error
-    return;
-  }
-
-  const { data: publicUrl } = supabase.storage.from("chat-uploads").getPublicUrl(data.path);
-  const url = publicUrl.publicUrl;
-
-  if (file.type.startsWith("video")) await sendMessage("video", url);
-  else if (file.type.startsWith("audio")) await sendMessage("audio", url);
-  else await sendMessage("image", url);
-
-  e.target.value = "";
-  setUploading(false); // ⬅️ stop loading after done
+  // ✅ Temporarily store the file for later sending
+  (fileInputRef.current as any).selectedFile = file;
 };
+
 
 
   const handleVoiceUpload = async (file: File) => {
@@ -589,7 +567,7 @@ msgChannel.subscribe();
         )}
 
         {/* Messages container */}
-        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-3 mb-24">
+        <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2 mb-20 sm:mb-24">
           {filteredMessages.map((msg) => {
             const isOwn = msg.sender_id === currentUser?.id;
             const profile = profileFor(msg.sender_id);
@@ -602,19 +580,24 @@ msgChannel.subscribe();
                 onContextMenu={(e) => handleMessageClick(e, msg.id)}
               >
                 {/* Avatar (click to open profile modal) */}
-               {!isOwn && (
-  <Image
-    src={profile?.avatar_url || "/default-avatar.png"}
-    alt={profile?.username || "Unknown"}
-    width={36}
-    height={36}
-    className="rounded-full cursor-pointer hover:opacity-80"
-    onClick={() => {
-      setProfileUserId(msg.sender_id);
-      setShowProfile(true);
-    }}
-  />
+              {isOwn && (
+  <div className="flex items-center gap-2">
+    <span className="text-xs text-blue-300">{profile?.username}</span>
+    <Image
+      src={profile?.avatar_url || "/default-avatar.png"}
+      alt={profile?.username || "Unknown"}
+      width={36}
+      height={36}
+      unoptimized
+      className="rounded-full cursor-pointer hover:opacity-80"
+      onClick={() => {
+        setProfileUserId(msg.sender_id);
+        setShowProfile(true);
+      }}
+    />
+  </div>
 )}
+
 
                 {/* Message bubble */}
                 <motion.div
