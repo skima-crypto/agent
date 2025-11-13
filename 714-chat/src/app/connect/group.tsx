@@ -92,7 +92,7 @@ export default function GroupConnect() {
 
   // ✅ Open group chat or group page
   const openGroup = (groupUsername: string) => {
-    router.push(`/connect/group/${groupUsername}`);
+    router.push(`/g/group/${groupUsername}`);
   };
 
   return (
