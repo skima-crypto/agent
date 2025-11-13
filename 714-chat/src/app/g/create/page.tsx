@@ -90,8 +90,8 @@ export default function CreateGroupPage() {
 
       if (!res.ok) throw new Error(data.error || "Failed to create group");
 
-      const link = `${window.location.origin}/invite/${data.group.group_username}`;
-      const groupPage = `/g/${data.group.group_username}`;
+     const link = `${window.location.origin}/g/invite/${data.group.group_username}`; // ✅ fixed path
+const groupPage = `/g/${data.group.group_username}`;
 
       setInviteLink(link);
       setGroupUrl(groupPage);
@@ -115,9 +115,10 @@ export default function CreateGroupPage() {
         <Button
           variant="ghost"
           className="mb-4 flex items-center gap-2"
-          
+          onClick={() => window.dispatchEvent(new Event("close-create-modal"))}
+
         >
-          <ArrowLeft size={18} /> Back
+          <ArrowLeft size={18} /> 
         </Button>
 
         <Card className="p-6 shadow-lg rounded-2xl">
