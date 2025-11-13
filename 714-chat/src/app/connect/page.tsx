@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
-import { Search, Loader2 } from "lucide-react";
+import { Search, Loader2, X, PlusCircle } from "lucide-react";
 import Image from "next/image";
 import Sidebar from "@/components/Sidebar";
 import { motion } from "framer-motion";
+import dynamic from "next/dynamic";
+import { Button } from "@/components/ui/button";
 
 // ✅ NEW
 import GroupConnect from "./group";
@@ -46,11 +48,22 @@ export default function ConnectPage() {
   const [groupResults, setGroupResults] = useState<Group[]>([]);
 
   const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const router = useRouter();
+
+  // ✅ Lazy load create group page
+  const CreateGroupPage = dynamic(() => import("@/app/g/create/page"), { ssr: false });
 
   useEffect(() => {
     loadUserAndChats();
     subscribeToPresence();
+  }, []);
+
+  // ✅ Listen for modal close event from inside the CreateGroupPage
+  useEffect(() => {
+    const closeListener = () => setShowCreateModal(false);
+    window.addEventListener("close-create-modal", closeListener);
+    return () => window.removeEventListener("close-create-modal", closeListener);
   }, []);
 
   // ✅ Fetch user + chats
@@ -132,34 +145,34 @@ export default function ConnectPage() {
     supabase.channel("presence").subscribe();
   };
 
-// ✅ GLOBAL SEARCH: Users + Groups
-const handleGlobalSearch = async (query: string) => {
-  setGlobalSearch(query);
+  // ✅ GLOBAL SEARCH: Users + Groups
+  const handleGlobalSearch = async (query: string) => {
+    setGlobalSearch(query);
 
-  if (query.trim().length < 2) {
-    setUserResults([]);
-    setGroupResults([]);
-    return;
-  }
+    if (query.trim().length < 2) {
+      setUserResults([]);
+      setGroupResults([]);
+      return;
+    }
 
-  // 🔎 search profiles
-  const { data: users } = await supabase
-    .from("profiles")
-    .select("id, username, avatar_url")
-    .ilike("username", `%${query}%`)
-    .limit(20);
+    // 🔎 search profiles
+    const { data: users } = await supabase
+      .from("profiles")
+      .select("id, username, avatar_url")
+      .ilike("username", `%${query}%`)
+      .limit(20);
 
-  setUserResults(users || []);
+    setUserResults(users || []);
 
-  // 🔎 search groups
-  const { data: groups } = await supabase
-    .from("groups")
-    .select("id, group_username, display_name, avatar_url, created_by, description")
-    .ilike("display_name", `%${query}%`)
-    .limit(20);
+    // 🔎 search groups
+    const { data: groups } = await supabase
+      .from("groups")
+      .select("id, group_username, display_name, avatar_url, created_by, description")
+      .ilike("display_name", `%${query}%`)
+      .limit(20);
 
-  setGroupResults(groups || []);
-}; // ✅ this was missing
+    setGroupResults(groups || []);
+  };
 
   const openChat = (username: string) => {
     router.push(`/connect/dm/${username}`);
@@ -174,7 +187,6 @@ const handleGlobalSearch = async (query: string) => {
       <Sidebar />
 
       <main className="flex-1 overflow-y-auto px-6 py-8 lg:ml-64">
-
         <h1 className="text-3xl font-extrabold mb-6 text-white tracking-tight">
           Connect
         </h1>
@@ -215,9 +227,7 @@ const handleGlobalSearch = async (query: string) => {
           <div className="mb-10 space-y-8">
             {/* Users */}
             <div>
-              <h2 className="text-lg font-semibold text-blue-300 mb-2">
-                Users
-              </h2>
+              <h2 className="text-lg font-semibold text-blue-300 mb-2">Users</h2>
 
               {userResults.length > 0 ? (
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -249,9 +259,7 @@ const handleGlobalSearch = async (query: string) => {
 
             {/* Groups */}
             <div>
-              <h2 className="text-lg font-semibold text-blue-300 mb-2">
-                Groups
-              </h2>
+              <h2 className="text-lg font-semibold text-blue-300 mb-2">Groups</h2>
 
               {groupResults.length > 0 ? (
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -334,8 +342,43 @@ const handleGlobalSearch = async (query: string) => {
           </div>
         )}
 
-        {section === "groups" && <GroupConnect />}
+        {section === "groups" && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-blue-300">Groups</h2>
+              <Button
+                onClick={() => setShowCreateModal(true)}
+                className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white"
+              >
+                <PlusCircle size={16} />
+                Create
+              </Button>
+            </div>
+            <GroupConnect />
+          </div>
+        )}
       </main>
+
+      {/* ✅ Modal for CreateGroupPage */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="relative w-full max-w-lg bg-blue-950 border border-blue-700/50 rounded-2xl shadow-xl overflow-y-auto max-h-[90vh] p-6"
+          >
+            <button
+              onClick={() => setShowCreateModal(false)}
+              className="absolute top-3 right-3 text-blue-200 hover:text-white"
+            >
+              <X size={20} />
+            </button>
+
+            <CreateGroupPage />
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

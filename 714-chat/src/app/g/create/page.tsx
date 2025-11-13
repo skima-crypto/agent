@@ -115,7 +115,7 @@ export default function CreateGroupPage() {
         <Button
           variant="ghost"
           className="mb-4 flex items-center gap-2"
-          onClick={() => router.back()}
+          
         >
           <ArrowLeft size={18} /> Back
         </Button>
